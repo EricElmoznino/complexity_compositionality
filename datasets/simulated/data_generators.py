@@ -1,0 +1,125 @@
+from abc import ABC, abstractmethod
+import numpy as np
+
+
+class SimulatedDataGenerator(ABC):
+    def sample(self, n: int) -> tuple[np.ndarray, np.ndarray]:
+        """Generates a sample of size n from the distribution.
+
+        Args:
+            n (int): Number of samples
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: (W integer matrix, Z float matrix)
+        """
+        w = self.sample_w(n)
+        z = self.sample_z_given_w(w)
+        return w, z
+
+    def compositionality(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
+        """Returns the compositionality of a representation.
+
+        Args:
+            z (np.ndarray): (n, d) float matrix of representations Z.
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            float: The expected per-sample compositionality of a representation.
+        """
+        return (self.k_w(w).mean() + self.k_decoder) / self.k_decoder
+
+    def k_z(self, z: np.ndarray, w: np.ndarray) -> float:
+        """Returns the expected Kolmogorov complexity of a representation in nats.
+
+        Args:
+            z (np.ndarray): (n, d) float matrix of representations Z.
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            float: The expected per-sample Kolmogorov complexity in nats.
+        """
+        return (
+            self.k_w(w).mean()
+            + self.k_z_given_w_and_decoder(z, w).mean()
+            + self.k_decoder
+        )
+
+    def k_w(self, w: np.ndarray) -> np.ndarray:
+        """Returns the Kolmogorov complexity of a given W in nats.
+
+        Args:
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            np.ndarray: (n,) integer matrix of sentences W.
+        """
+        return -self.logp_w(w)
+
+    def k_z_given_w_and_decoder(self, z: np.ndarray, w: np.ndarray):
+        """Returns the Kolmogorov complexity of a given Z given W and p(z | w) in nats.
+
+        Args:
+            z (np.ndarray): (n, d) float matrix of representations Z.
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+        """
+        return -self.logp_z_given_w(z, w)
+
+    @property
+    @abstractmethod
+    def k_decoder(self) -> float:
+        """The Kolmogorov complexity of the decoding function that describes p(z | w) in nats."""
+        pass
+
+    @abstractmethod
+    def sample_w(self, n: int) -> np.ndarray:
+        """Generates a sample of size (n, k) from the distribution over sentences.
+
+        Args:
+            n (int): Number of samples
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: (n, k) integer matrix of sentences W.
+        """
+        pass
+
+    @abstractmethod
+    def sample_z_given_w(self, w: np.ndarray) -> np.ndarray:
+        """Generates a sample of size (n, d) from the distribution over representations given sentences.
+
+        Args:
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            np.ndarray: (n, d) float matrix of representations Z.
+        """
+        pass
+
+    @abstractmethod
+    def logp_w(self, w: np.ndarray) -> np.ndarray:
+        """Returns the log probability of a given W.
+
+        Args:
+            w (np.ndarray): Integer matrix of size (n, k)
+
+        Returns:
+            np.ndarray: (n,) vector of sentence log probabilities.
+        """
+        pass
+
+    @abstractmethod
+    def logp_z_given_w(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
+        """Returns the log probability of a given Z given W.
+
+        Args:
+            z (np.ndarray): Float matrix of size (n, d)
+            w (np.ndarray): Integer matrix of size (n, k)
+
+        Returns:
+            np.ndarray: (n,) vector of representation log probabilities.
+        """
+        pass
+
+
+##############################################################
+########## Subclasses for different data generators ##########
+##############################################################
