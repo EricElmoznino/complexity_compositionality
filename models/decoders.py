@@ -6,15 +6,20 @@ from torch import nn, FloatTensor
 from models.utils import learned_token_encodings, positional_token_encodings
 
 
-class VQVAEDecoder(ABC, nn.Module):
+class VqVaeDecoder(ABC, nn.Module):
+    def __init__(self, emb_dim: int, num_words: int) -> None:
+        super().__init__()
+        self.emb_dim = emb_dim
+        self.num_words = num_words
+
     @abstractmethod
     def forward(self, w_emb: FloatTensor) -> tuple[FloatTensor, FloatTensor]:
         """
         Args:
-            w_emb (FloatTensor): (bs, num_tokens, emb_dim)
+            w_emb (FloatTensor): (bs, num_words, emb_dim)
 
         Returns:
-            tuple[FloatTensor, FloatTensor]: mean: (bs, ...), logstd: (bs, ...)
+            tuple[FloatTensor, FloatTensor]: mean - (bs, ...), logstd - (bs, ...)
         """
         pass
 
@@ -24,14 +29,14 @@ class VQVAEDecoder(ABC, nn.Module):
 ##############################################################
 
 
-class TransformerVQVAEDecoder(VQVAEDecoder):
+class TransformerVqVaeDecoder(VqVaeDecoder):
     TokenEncodingType = Literal["learned", "positional"]
 
     def __init__(
         self,
-        repr_dim: int,
         emb_dim: int,
-        num_tokens: int,
+        num_words: int,
+        repr_dim: int,
         num_heads: int = 4,
         num_layers: int = 4,
         mlp_hidden_dim: int | None = None,
@@ -39,11 +44,9 @@ class TransformerVQVAEDecoder(VQVAEDecoder):
         token_encoding_type: TokenEncodingType = "learned",
         fixed_repr_std: float | None = 1.0,
     ) -> None:
-        super().__init__()
+        super().__init__(emb_dim=emb_dim, num_words=num_words)
         assert repr_dim >= emb_dim, "repr_dim must be >= emb_dim"
         self.repr_dim = repr_dim
-        self.emb_dim = emb_dim
-        self.num_tokens = num_tokens
         self.num_heads = num_heads
         self.num_layers = num_layers
         self.mlp_hidden_dim = emb_dim if mlp_hidden_dim is None else mlp_hidden_dim
@@ -53,9 +56,9 @@ class TransformerVQVAEDecoder(VQVAEDecoder):
 
         # Positional encodings
         if self.token_encoding_type == "learned":
-            self.token_encoding = learned_token_encodings(emb_dim, num_tokens)
+            self.token_encoding = learned_token_encodings(emb_dim, num_words)
         elif self.token_encoding_type == "positional":
-            self.token_encoding = positional_token_encodings(emb_dim, num_tokens)
+            self.token_encoding = positional_token_encodings(emb_dim, num_words)
         else:
             raise ValueError(
                 f"token_encoding_type must be 'learned' or 'positional', got {token_encoding_type}"
