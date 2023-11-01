@@ -54,4 +54,4 @@ data:
 trainer:
   max_epochs: 1000
 
-callbacks: null
+callbacks: False
