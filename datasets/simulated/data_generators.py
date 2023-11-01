@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-
+import scipy
 
 class SimulatedDataGenerator(ABC):
     def sample(self, n: int) -> tuple[np.ndarray, np.ndarray]:
@@ -17,7 +17,7 @@ class SimulatedDataGenerator(ABC):
         return w, z
 
     def compositionality(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
-        """Returns the compositionality of a representation.
+        """Returns the compositionality of a representation with our first formula
 
         Args:
             z (np.ndarray): (n, d) float matrix of representations Z.
@@ -123,3 +123,65 @@ class SimulatedDataGenerator(ABC):
 ##############################################################
 ########## Subclasses for different data generators ##########
 ##############################################################
+
+class UniformDataGenerator(SimulatedDataGenerator):
+    def __init__(self, k: int, d: int, vocab_size: int, noise_level=0.1, random_seed: int = 0):
+        """Generates data in the following way
+        - Generate a lookup table of size (vocab_size, int(d/k)) such that we have a representation of dimension int(d/k) for each word
+        - Generate a sentence W by:
+            - sampling k words uniformly at random from the vocabulary.
+            - taking the corresponding representations from the lookup table and concatenating them
+            - adding noise sampled from a uniform distribution on [-noise_level, noise_level]
+
+        Args:
+            k (int): Number of words in a sentence.
+            d (int): Dimensionality of the final representation 
+            vocab_size (int): Size of the vocabulary.
+            random_seed (int): Random seed for reproducibility
+        """
+        self.k = k
+        self.d = d
+        self.vocab_size = vocab_size
+
+        np.random.seed(random_seed)
+        self.lookup_table = np.random.uniform(size=(vocab_size, int(d/k)))
+        self.noise_level = noise_level
+
+    @property
+    def k_decoder(self) -> float:
+        return -np.log(self.lookup_table.size)
+
+    def sample_w(self, n: int) -> np.ndarray:
+        return np.random.randint(0, self.vocab_size, size=(n, self.k))
+
+    def sample_z_given_w(self, w: np.ndarray) -> np.ndarray:
+        pure_samples = self.decode_w_perfectly(w)
+        noise = np.random.uniform(-self.noise_level, self.noise_level, size=pure_samples.shape)
+
+        return pure_samples + noise
+
+    def decode_w_perfectly(self, w: np.ndarray) -> np.ndarray:
+        """Computes and returns the perfect (noiseless) decoding of z given w
+        Args:
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            np.ndarray: (n, d) float matrix of representations z.
+        """
+        
+        return np.concatenate([self.lookup_table[w[:, i]] for i in range(self.k)], axis=1)
+    
+    def logp_w(self, w: np.ndarray) -> np.ndarray:
+        return np.log(1/self.vocab_size) * self.k 
+
+    def logp_z_given_w(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
+        batch_size, _ = z.shape
+        means = []
+
+        # Do this in a loop because scipy.stats.multivariate_normal.logpdf doesn't support batched means
+        for i in range(batch_size):
+            means.append(self.decode_w_perfectly(w[i].reshape((1, -1))).squeeze())
+
+        return np.array([scipy.stats.multivariate_normal.logpdf(z[i].squeeze(), mean=means[i]) for i in range(batch_size)])
+
+        
