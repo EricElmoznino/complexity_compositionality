@@ -1,0 +1,14 @@
+defaults:
+  - _self_
+  - hydra: default
+  - experiment: null
+
+save_dir: "logs/"
+seed: 27
+
+logger:
+  _target_: lightning.pytorch.loggers.WandbLogger
+  name: ${now:%Y-%m-%d}_${now:%H-%M-%S}
+  project: "Complexity - ${experiment.name}"
+  save_dir: ${save_dir}
+  offline: False

@@ -125,18 +125,16 @@ class VqVae(LightningModule):
         )
 
         # Log metrics
-        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/loss", loss, rog_bar=True)
         for k, v in losses.items():
-            self.log(f"train/{k}", v, on_step=False, on_epoch=True)
+            self.log(f"val/{k}", v)
         if self.fit_autoencoder:
             self.log(
-                "train/K(z|w,decoder)",
+                "val/K(z|w,decoder)",
                 self.k_z_given_w_and_decoder(z, zpred_mu, zpred_logstd),
-                on_step=False,
-                on_epoch=True,
             )
         if self.use_lm:
-            self.log("train/K(w)", self.k_w(w_logits, w), on_step=False, on_epoch=True)
+            self.log("val/K(w)", self.k_w(w_logits, w))
 
         return loss
 
