@@ -198,11 +198,8 @@ class UniformDataGenerator(SimulatedDataGenerator):
 
     def logp_z_given_w(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
         batch_size, _ = z.shape
-        means = []
+        means = self.decode_w_perfectly(w)
 
-        # Do this in a loop because scipy.stats.multivariate_normal.logpdf doesn't support batched means
-        for i in range(batch_size):
-            means.append(self.decode_w_perfectly(w[i].reshape((1, -1))).squeeze())
         int_noise = ((z - means) / self.noise_scale).astype(int)
         return np.array(
             [skellam.logpmf(int_noise[i], mu1=0.5, mu2=0.5) for i in range(batch_size)]
