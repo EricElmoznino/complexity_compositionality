@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import scipy
+from scipy.stats import skellam
+
 
 class SimulatedDataGenerator(ABC):
     def sample(self, n: int) -> tuple[np.ndarray, np.ndarray]:
@@ -124,8 +126,17 @@ class SimulatedDataGenerator(ABC):
 ########## Subclasses for different data generators ##########
 ##############################################################
 
+
 class UniformDataGenerator(SimulatedDataGenerator):
-    def __init__(self, k: int, d: int, vocab_size: int, noise_level=0.1, random_seed: int = 0):
+    def __init__(
+        self,
+        k: int,
+        d: int,
+        vocab_size: int,
+        granularity: float = 0.01,
+        noise_scale: float = 0.001,
+        random_seed: int = 0,
+    ):
         """Generates data in the following way
         - Generate a lookup table of size (vocab_size, int(d/k)) such that we have a representation of dimension int(d/k) for each word
         - Generate a sentence W by:
@@ -135,28 +146,37 @@ class UniformDataGenerator(SimulatedDataGenerator):
 
         Args:
             k (int): Number of words in a sentence.
-            d (int): Dimensionality of the final representation 
+            d (int): Dimensionality of the final representation
             vocab_size (int): Size of the vocabulary.
+            granularity (float): Granularity of the lookup table.
             random_seed (int): Random seed for reproducibility
         """
         self.k = k
         self.d = d
         self.vocab_size = vocab_size
+        self.max_int = 1 / granularity
 
         np.random.seed(random_seed)
-        self.lookup_table = np.random.uniform(size=(vocab_size, int(d/k)))
-        self.noise_level = noise_level
+
+        self.lookup_table = (
+            np.random.randint(2 * self.max_int + 1, size=(vocab_size, int(d / k)))
+            / self.max_int
+            - 1
+        )
+        self.noise_scale = noise_scale
 
     @property
     def k_decoder(self) -> float:
-        return -np.log(self.lookup_table.size)
+        return np.log(self.lookup_table.size * (2 * self.max_int + 1))
 
     def sample_w(self, n: int) -> np.ndarray:
         return np.random.randint(0, self.vocab_size, size=(n, self.k))
 
     def sample_z_given_w(self, w: np.ndarray) -> np.ndarray:
         pure_samples = self.decode_w_perfectly(w)
-        noise = np.random.uniform(-self.noise_level, self.noise_level, size=pure_samples.shape)
+        noise = (
+            skellam.rvs(mu1=0.5, mu2=0.5, size=pure_samples.shape) * self.noise_scale
+        )
 
         return pure_samples + noise
 
@@ -168,11 +188,13 @@ class UniformDataGenerator(SimulatedDataGenerator):
         Returns:
             np.ndarray: (n, d) float matrix of representations z.
         """
-        
-        return np.concatenate([self.lookup_table[w[:, i]] for i in range(self.k)], axis=1)
-    
+
+        return np.concatenate(
+            [self.lookup_table[w[:, i]] for i in range(self.k)], axis=1
+        )
+
     def logp_w(self, w: np.ndarray) -> np.ndarray:
-        return np.log(1/self.vocab_size) * self.k 
+        return np.log(1 / self.vocab_size) * self.k
 
     def logp_z_given_w(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
         batch_size, _ = z.shape
@@ -181,7 +203,12 @@ class UniformDataGenerator(SimulatedDataGenerator):
         # Do this in a loop because scipy.stats.multivariate_normal.logpdf doesn't support batched means
         for i in range(batch_size):
             means.append(self.decode_w_perfectly(w[i].reshape((1, -1))).squeeze())
+        int_noise = ((z - means) / self.noise_scale).astype(int)
+        return np.array(
+            [skellam.logpmf(int_noise[i], mu1=0.5, mu2=0.5) for i in range(batch_size)]
+        )
 
-        return np.array([scipy.stats.multivariate_normal.logpdf(z[i].squeeze(), mean=means[i]) for i in range(batch_size)])
 
-        
+data_gen = UniformDataGenerator(k=10, d=256, vocab_size=1000, granularity=0.01)
+w, z = data_gen.sample(10)
+logp = data_gen.logp_z_given_w(z, w)
