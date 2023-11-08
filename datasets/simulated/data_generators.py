@@ -28,43 +28,62 @@ class SimulatedDataGenerator(ABC):
         Returns:
             float: The expected per-sample compositionality of a representation.
         """
-        return (self.k_w(w).mean() + self.k_decoder) / self.k_decoder
+        return self.k_w_given_language(w, per_sample=True) / self.k_decoder
 
-    def k_z(self, z: np.ndarray, w: np.ndarray) -> float:
+    def k_z(self, z: np.ndarray, w: np.ndarray, per_sample: bool = False) -> float:
         """Returns the expected Kolmogorov complexity of a representation in nats.
 
         Args:
             z (np.ndarray): (n, d) float matrix of representations Z.
             w (np.ndarray): (n, k) integer matrix of sentences W.
+            per_sample (bool): Whether to return the per-sample or total complexity.
 
         Returns:
-            float: The expected per-sample Kolmogorov complexity in nats.
+            float: Either the expected per-sample or the total Kolmogorov complexity in nats.
         """
         return (
-            self.k_w(w).mean()
-            + self.k_z_given_w_and_decoder(z, w).mean()
+            self.k_language
+            + self.k_w_given_language(w, per_sample=per_sample)
             + self.k_decoder
+            + self.k_z_given_w_and_decoder(z, w, per_sample=per_sample)
         )
 
-    def k_w(self, w: np.ndarray) -> np.ndarray:
-        """Returns the Kolmogorov complexity of a given W in nats.
+    def k_w_given_language(self, w: np.ndarray, per_sample: bool = False) -> float:
+        """Returns the Kolmogorov complexity of a given W given p(w) in nats.
 
         Args:
             w (np.ndarray): (n, k) integer matrix of sentences W.
 
         Returns:
-            np.ndarray: (n,) integer matrix of sentences W.
+            float: Either the expected per-sample or the total Kolmogorov complexity in nats.
         """
-        return -self.logp_w(w)
+        if per_sample:
+            return -self.logp_w(w).mean()
+        else:
+            return -self.logp_w(w).sum()
 
-    def k_z_given_w_and_decoder(self, z: np.ndarray, w: np.ndarray):
+    def k_z_given_w_and_decoder(
+        self, z: np.ndarray, w: np.ndarray, per_sample: bool = False
+    ) -> float:
         """Returns the Kolmogorov complexity of a given Z given W and p(z | w) in nats.
 
         Args:
             z (np.ndarray): (n, d) float matrix of representations Z.
             w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            float: Either the expected per-sample or the total Kolmogorov complexity in nats.
         """
-        return -self.logp_z_given_w(z, w)
+        if per_sample:
+            return -self.logp_z_given_w(z, w).mean()
+        else:
+            return -self.logp_z_given_w(z, w).sum()
+
+    @property
+    @abstractmethod
+    def k_language(self) -> float:
+        """The Kolmogorov complexity of the language function that describes p(w) in nats."""
+        pass
 
     @property
     @abstractmethod
@@ -166,8 +185,16 @@ class UniformDataGenerator(SimulatedDataGenerator):
         self.noise_scale = noise_scale
 
     @property
+    def k_language(self) -> float:
+        # Have to specify the bits for two integer numbers,
+        # and the rest of p(w) has (small) constant complexity.
+        return np.log(self.vocab_size) + np.log(self.k)
+
+    @property
     def k_decoder(self) -> float:
-        return np.log(self.lookup_table.size * (2 * self.max_int + 1))
+        # Have to specify the bits for all the numbers in the lookup table,
+        # and the rest of p(z | w) has (small) constant complexity.
+        return self.lookup_table.size * np.log(2 * self.max_int + 1)
 
     def sample_w(self, n: int) -> np.ndarray:
         return np.random.randint(0, self.vocab_size, size=(n, self.k))
@@ -204,8 +231,3 @@ class UniformDataGenerator(SimulatedDataGenerator):
         return np.array(
             [skellam.logpmf(int_noise[i], mu1=0.5, mu2=0.5) for i in range(batch_size)]
         )
-
-
-data_gen = UniformDataGenerator(k=10, d=256, vocab_size=1000, granularity=0.01)
-w, z = data_gen.sample(10)
-logp = data_gen.logp_z_given_w(z, w)
