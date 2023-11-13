@@ -22,7 +22,7 @@ class VqVae(LightningModule):
         lr: float = 1e-3,
         lr_lm: float | None = None,
         lr_discretizer: float | None = None,
-        t_init: int = 1,
+        t_init: int = 0,
         t_reestimate: int = 10,
         p_reestimate: int = 2,
         t_lm: int = 20,
@@ -146,7 +146,10 @@ class VqVae(LightningModule):
             <= self.current_epoch
             < self.hparams.t_init + self.hparams.t_reestimate
         ):
-            if self.current_epoch % self.hparams.p_reestimate == 0:
+            if (
+                self.current_epoch % self.hparams.p_reestimate == 0
+                and self.current_epoch > 0
+            ):
                 self.reestimate_word_embeddings()
 
     def set_training_phase(self) -> None:
