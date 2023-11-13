@@ -16,7 +16,7 @@ framework:
     _target_: models.encoders.TransformerVqVaeEncoder
     emb_dim: 64
     num_words: 3
-    repr_dim: 64
+    repr_dim: 256
     num_heads: 2
     num_layers: 4
     mlp_hidden_dim: null
@@ -46,8 +46,8 @@ framework:
     
 data:
   _target_: datasets.data_modules.TensorDataModule
-  train_filepath: "data/debug/train.pt"
-  val_filepath: "data/debug/val.pt"
+  train_filepath: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/data/simulated/uniform/vocab_size=1000_d=256_k=32_nsamples=100000/z_train.pt"
+  val_filepath: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/data/simulated/uniform/vocab_size=1000_d=256_k=32_nsamples=100000/z_test.pt"
   batch_size: 64
   num_workers: 4
 
