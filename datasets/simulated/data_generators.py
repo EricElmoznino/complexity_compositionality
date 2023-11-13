@@ -181,7 +181,7 @@ class UniformDataGenerator(SimulatedDataGenerator):
             np.random.randint(2 * self.max_int + 1, size=(vocab_size, int(d / k)))
             / self.max_int
             - 1
-        )
+        ).astype(np.float32)
         self.noise_scale = noise_scale
 
     @property
@@ -203,7 +203,7 @@ class UniformDataGenerator(SimulatedDataGenerator):
         pure_samples = self.decode_w_perfectly(w)
         noise = (
             skellam.rvs(mu1=0.5, mu2=0.5, size=pure_samples.shape) * self.noise_scale
-        )
+        ).astype(np.float32)
 
         return pure_samples + noise
 
@@ -221,7 +221,7 @@ class UniformDataGenerator(SimulatedDataGenerator):
         )
 
     def logp_w(self, w: np.ndarray) -> np.ndarray:
-        return np.log(1 / self.vocab_size) * self.k
+        return np.ones_like(w, dtype=np.float32) * np.log(1 / self.vocab_size) * self.k
 
     def logp_z_given_w(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
         batch_size, _ = z.shape
@@ -230,4 +230,4 @@ class UniformDataGenerator(SimulatedDataGenerator):
         int_noise = ((z - means) / self.noise_scale).astype(int)
         return np.array(
             [skellam.logpmf(int_noise[i], mu1=0.5, mu2=0.5) for i in range(batch_size)]
-        )
+        ).astype(np.float32)

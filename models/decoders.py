@@ -66,7 +66,7 @@ class TransformerVqVaeDecoder(VqVaeDecoder):
         self.num_repr_tokens = math.ceil(repr_dim / emb_dim)
         if fixed_repr_std is None:
             self.num_repr_tokens *= 2  # mean and std for each representation token
-        self.leftover_repr_dim = emb_dim - repr_dim % emb_dim
+        self.leftover_repr_dim = (emb_dim - repr_dim % emb_dim) % emb_dim
         self.repr_token_encoding = learned_token_encodings(
             emb_dim, self.num_repr_tokens
         )

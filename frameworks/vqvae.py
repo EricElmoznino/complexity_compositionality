@@ -15,13 +15,14 @@ class VqVae(LightningModule):
         encoder: VqVaeEncoder,
         decoder: VqVaeDecoder,
         lm: VqVaeLM,
+        vocab_size: int,
         beta_lm: float = 1.0,
         beta_codebook: float = 1.0,
         beta_commit: float = 1.0,
         lr: float = 1e-3,
         lr_lm: float | None = None,
         lr_discretizer: float | None = None,
-        t_init: int = 0,
+        t_init: int = 1,
         t_reestimate: int = 10,
         p_reestimate: int = 2,
         t_lm: int = 20,
@@ -31,7 +32,7 @@ class VqVae(LightningModule):
         self.encoder = encoder
         self.decoder = decoder
         self.lm = lm
-        self.discretizer = Discretizer(self.encoder.num_words, self.encoder.emb_dim)
+        self.discretizer = Discretizer(self.hparams.vocab_size, self.encoder.emb_dim)
         self.encoder_norm = nn.BatchNorm1d(self.encoder.emb_dim)
 
         # At different stages of training, we want to enable/disable different parts
@@ -63,10 +64,10 @@ class VqVae(LightningModule):
             else 0.0,
             "loss_lm": self.k_w(w_logits, w, per_dim=True) if self.use_lm else 0.0,
             "loss_codebook": F.mse_loss(z_e, w_emb.detach())
-            if self.use_discretizer
+            if self.use_discretizer and self.fit_autoencoder
             else 0.0,
             "loss_commit": F.mse_loss(w_emb, z_e.detach())
-            if self.use_discretizer
+            if self.use_discretizer and self.fit_autoencoder
             else 0.0,
         }
         loss = (
@@ -125,7 +126,7 @@ class VqVae(LightningModule):
         )
 
         # Log metrics
-        self.log("val/loss", loss, rog_bar=True)
+        self.log("val/loss", loss, prog_bar=True)
         for k, v in losses.items():
             self.log(f"val/{k}", v)
         if self.fit_autoencoder:
@@ -153,10 +154,12 @@ class VqVae(LightningModule):
             self.use_discretizer = False
             self.use_lm = False
             self.fit_autoencoder = True
+            self.log("misc/phase", 3.0, on_step=False, on_epoch=True)
         elif self.current_epoch < self.hparams.t_init + self.hparams.t_reestimate:
             self.use_discretizer = True
             self.use_lm = False
             self.fit_autoencoder = True
+            self.log("misc/phase", 2.0, on_step=False, on_epoch=True)
         elif (
             self.current_epoch
             < self.hparams.t_init + self.hparams.t_reestimate + self.hparams.t_lm
@@ -164,21 +167,23 @@ class VqVae(LightningModule):
             self.use_discretizer = True
             self.use_lm = True
             self.fit_autoencoder = False
+            self.log("misc/phase", 1.0, on_step=False, on_epoch=True)
         else:
             self.use_discretizer = True
             self.use_lm = True
             self.fit_autoencoder = True
+            self.log("misc/phase", 0.0, on_step=False, on_epoch=True)
 
     @torch.inference_mode()
     def reestimate_word_embeddings(self) -> None:
         z_es = []
         for z in self.trainer.datamodule.val_dataloader():
             z = z.to(self.device)
-            z_e = self.encoder_norm(self.encoder(z))
-            z_e = z_e.view(-1, z_e.shape[-1])  # Individual word representations
+            z_e = self.encoder_norm(self.encoder(z).transpose(1, 2)).transpose(1, 2)
             z_es.append(z_e.cpu().numpy())
         z_es = np.concatenate(z_es, axis=0)
-        kmeans = KMeans(n_clusters=self.discretizer.vocab_size, n_jobs=-1)
+        z_es = z_es.reshape(-1, z_es.shape[-1])  # (bs * num_tokens, emb_dim)
+        kmeans = KMeans(n_clusters=self.discretizer.vocab_size, n_init="auto")
         w_emb = kmeans.fit(z_es).cluster_centers_
         w_emb = torch.from_numpy(w_emb).to(self.device)
         self.discretizer.emb_table.weight.data = w_emb
@@ -193,9 +198,9 @@ class VqVae(LightningModule):
         dist = torch.distributions.Normal(zpred_mu, zpred_logstd.exp())
         k = -dist.log_prob(z)
         if per_dim:
-            k = k.mean(dim=range(1, z.ndim))
+            k = k.mean(dim=tuple(range(1, z.ndim)))
         else:
-            k = k.sum(dim=range(1, z.ndim))
+            k = k.sum(dim=tuple(range(1, z.ndim)))
         k = k.mean()
         return k
 

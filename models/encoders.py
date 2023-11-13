@@ -62,7 +62,7 @@ class TransformerVqVaeEncoder(VqVaeEncoder):
                 f"token_encoding_type must be 'learned' or 'positional', got {token_encoding_type}"
             )
         self.num_repr_tokens = math.ceil(repr_dim / emb_dim)
-        self.leftover_repr_dim = emb_dim - repr_dim % emb_dim
+        self.leftover_repr_dim = (emb_dim - repr_dim % emb_dim) % emb_dim
         self.repr_token_encoding = learned_token_encodings(
             emb_dim, self.num_repr_tokens
         )

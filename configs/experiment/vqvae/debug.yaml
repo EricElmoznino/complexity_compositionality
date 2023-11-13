@@ -8,17 +8,18 @@ framework:
   lr: 0.001
   lr_lm: null
   lr_discretizer: null
-  t_init: 0
+  t_init: 1
   t_reestimate: 10
   p_reestimate: 2
   t_lm: 20
+  vocab_size: 1000
   encoder:
     _target_: models.encoders.TransformerVqVaeEncoder
-    emb_dim: 64
-    num_words: 3
-    repr_dim: 64
+    emb_dim: 32
+    num_words: 8
+    repr_dim: 256
     num_heads: 2
-    num_layers: 4
+    num_layers: 2
     mlp_hidden_dim: null
     dropout: 0.0
     token_encoding_type: "learned"
@@ -46,8 +47,8 @@ framework:
     
 data:
   _target_: datasets.data_modules.TensorDataModule
-  train_filepath: "data/debug/train.pt"
-  val_filepath: "data/debug/val.pt"
+  train_filepath: "data/simulated/uniform/vocab_size=1000_d=256_k=8_nsamples=100000/z_train.pt"
+  val_filepath: "data/simulated/uniform/vocab_size=1000_d=256_k=8_nsamples=100000/z_test.pt"
   batch_size: 64
   num_workers: 4
 

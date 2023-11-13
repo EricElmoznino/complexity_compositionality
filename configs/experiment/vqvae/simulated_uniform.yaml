@@ -1,4 +1,4 @@
-name: "VQ-VAE-Debug"
+name: "VQ-VAE-Simulated-Uniform"
 
 framework:
   _target_: frameworks.vqvae.VqVae
@@ -12,6 +12,7 @@ framework:
   t_reestimate: 10
   p_reestimate: 2
   t_lm: 20
+  vocab_size: 1000
   encoder:
     _target_: models.encoders.TransformerVqVaeEncoder
     emb_dim: 64
