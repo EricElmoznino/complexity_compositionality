@@ -62,7 +62,9 @@ class VqVae(LightningModule):
             )
             if self.fit_autoencoder
             else 0.0,
-            "loss_lm": self.k_w(w_logits, w, per_dim=True) if self.use_lm else 0.0,
+            "loss_lm": self.k_w_given_language(w_logits, w, per_dim=True)
+            if self.use_lm
+            else 0.0,
             "loss_codebook": F.mse_loss(z_e, w_emb.detach())
             if self.use_discretizer and self.fit_autoencoder
             else 0.0,
@@ -89,7 +91,12 @@ class VqVae(LightningModule):
                 on_epoch=True,
             )
         if self.use_lm:
-            self.log("train/K(w)", self.k_w(w_logits, w), on_step=False, on_epoch=True)
+            self.log(
+                "train/K(w|language)",
+                self.k_w_given_language(w_logits, w),
+                on_step=False,
+                on_epoch=True,
+            )
 
         return loss
 
@@ -110,7 +117,9 @@ class VqVae(LightningModule):
             "loss_recon": self.k_z_given_w_and_decoder(
                 z, zpred_mu, zpred_logstd, per_dim=True
             ),
-            "loss_lm": self.k_w(w_logits, w, per_dim=True) if self.use_lm else 0.0,
+            "loss_lm": self.k_w_given_language(w_logits, w, per_dim=True)
+            if self.use_lm
+            else 0.0,
             "loss_codebook": F.mse_loss(z_e, w_emb.detach())
             if self.use_discretizer
             else 0.0,
@@ -135,7 +144,7 @@ class VqVae(LightningModule):
                 self.k_z_given_w_and_decoder(z, zpred_mu, zpred_logstd),
             )
         if self.use_lm:
-            self.log("val/K(w)", self.k_w(w_logits, w))
+            self.log("val/K(w|language)", self.k_w_given_language(w_logits, w))
 
         return loss
 
@@ -207,7 +216,7 @@ class VqVae(LightningModule):
         k = k.mean()
         return k
 
-    def k_w(
+    def k_w_given_language(
         self,
         w_logits: FloatTensor,
         w: LongTensor,

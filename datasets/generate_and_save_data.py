@@ -5,14 +5,14 @@ import torch
 from sklearn.model_selection import train_test_split
 
 scratch = os.environ["SCRATCH"]
-data_folder_path = f"{scratch}/kolmogorov/data/simulated/uniform"
+data_folder_path = f"{scratch}/complexity_compositionality/data/simulated/uniform"
 os.makedirs(data_folder_path, exist_ok=True)
 
 n_samples = 100000
 compositionality_dict = {}
-for vocab_size in [1000]:
+for vocab_size in [10, 100]:
     for d in [256, 512, 1024]:
-        for k in [1, 2, 4, 8, 16, 32, 64]:
+        for k in [2, 4, 8]:
             if k > d:
                 continue
             data_generator = UniformDataGenerator(k=k, d=d, vocab_size=vocab_size)
