@@ -1,5 +1,8 @@
 import hydra
 from lightning import Trainer, seed_everything
+import warnings
+
+warnings.filterwarnings("ignore", ".*does not have many workers.*")
 
 
 @hydra.main(config_path="./configs/", config_name="train", version_base=None)

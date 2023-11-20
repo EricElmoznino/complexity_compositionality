@@ -2,9 +2,9 @@ name: "VQ-VAE-Simulated-Uniform"
 
 framework:
   _target_: frameworks.vqvae.VqVae
-  beta_lm:  1.0
+  beta_lm:  0.0
   beta_codebook: 1.0
-  beta_commit: 1.0
+  beta_commit: 0.25
   lr: 0.001
   lr_lm: null
   lr_discretizer: null
@@ -13,6 +13,7 @@ framework:
   p_reestimate: 2
   t_lm: 20
   vocab_size: 1000
+  encoder_norm: True
   encoder:
     _target_: models.encoders.TransformerVqVaeEncoder
     emb_dim: 64
@@ -50,7 +51,7 @@ data:
   train_filepath: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/data/simulated/uniform/vocab_size=1000_d=256_k=32_nsamples=100000/z_train.pt"
   val_filepath: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/data/simulated/uniform/vocab_size=1000_d=256_k=32_nsamples=100000/z_test.pt"
   batch_size: 64
-  num_workers: 4
+  num_workers: 0
 
 trainer:
   max_epochs: 1000

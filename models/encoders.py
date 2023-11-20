@@ -3,7 +3,7 @@ from typing import Literal
 import math
 import torch
 from torch import nn, FloatTensor
-from models.utils import learned_token_encodings, positional_token_encodings
+from models.utils import learned_token_encodings, positional_token_encodings, MLP
 
 
 class VqVaeEncoder(ABC, nn.Module):
@@ -105,4 +105,33 @@ class TransformerVqVaeEncoder(VqVaeEncoder):
         # Get final token embeddings
         w_emb = self.transformer(input)[:, : self.num_words, :]
 
+        return w_emb
+
+
+class MLPVqVaeEncoder(VqVaeEncoder):
+    def __init__(
+        self,
+        emb_dim: int,
+        num_words: int,
+        repr_dim: int,
+        num_layers: int = 4,
+        hidden_dim: int = 256,
+        dropout: float = 0.0,
+    ) -> None:
+        super().__init__(emb_dim=emb_dim, num_words=num_words)
+        assert (
+            repr_dim >= emb_dim * num_words
+        ), "repr_dim must be >= emb_dim * num_words"
+        self.mlp = MLP(
+            num_inputs=repr_dim,
+            num_outputs=emb_dim * num_words,
+            num_layers=num_layers,
+            hidden_dim=hidden_dim,
+            dropout=dropout,
+        )
+
+    def forward(self, z: FloatTensor) -> FloatTensor:
+        z = z.view(z.shape[0], -1)
+        w_emb = self.mlp(z)
+        w_emb = w_emb.view(z.shape[0], self.num_words, self.emb_dim)
         return w_emb

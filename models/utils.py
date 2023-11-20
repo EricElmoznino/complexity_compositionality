@@ -37,3 +37,36 @@ def positional_token_encodings(emb_dim: int, num_tokens: int) -> FloatTensor:
     pe[:, 1::2] = torch.cos(position * div_term)
     pe = pe.unsqueeze(0)
     return pe
+
+
+class MLP(nn.Module):
+    def __init__(
+        self,
+        num_inputs: int,
+        num_outputs: int,
+        num_layers: int = 4,
+        hidden_dim: int = 256,
+        dropout: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.num_inputs = num_inputs
+        self.num_outputs = num_outputs
+        self.num_layers = num_layers
+        self.hidden_dim = hidden_dim
+        self.dropout = dropout
+
+        layers = []
+        for _ in range(num_layers - 1):
+            layers.extend(
+                [
+                    nn.Linear(num_inputs, hidden_dim),
+                    nn.ReLU(),
+                    nn.Dropout(dropout),
+                ]
+            )
+            num_inputs = hidden_dim
+        layers.append(nn.Linear(num_inputs, num_outputs))
+        self.mlp = nn.Sequential(*layers)
+
+    def forward(self, x: FloatTensor) -> FloatTensor:
+        return self.mlp(x)

@@ -18,7 +18,7 @@ class VqVae(LightningModule):
         vocab_size: int,
         beta_lm: float = 1.0,
         beta_codebook: float = 1.0,
-        beta_commit: float = 1.0,
+        beta_commit: float = 0.25,
         lr: float = 1e-3,
         lr_lm: float | None = None,
         lr_discretizer: float | None = None,
@@ -26,6 +26,7 @@ class VqVae(LightningModule):
         t_reestimate: int = 10,
         p_reestimate: int = 2,
         t_lm: int = 20,
+        encoder_norm: bool = True,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["encoder", "decoder", "lm"])
@@ -33,7 +34,9 @@ class VqVae(LightningModule):
         self.decoder = decoder
         self.lm = lm
         self.discretizer = Discretizer(self.hparams.vocab_size, self.encoder.emb_dim)
-        self.encoder_norm = nn.BatchNorm1d(self.encoder.emb_dim)
+        self.encoder_norm = (
+            nn.BatchNorm1d(self.encoder.emb_dim) if encoder_norm else nn.Identity()
+        )
 
         # At different stages of training, we want to enable/disable different parts
         self.use_discretizer = True
@@ -45,7 +48,7 @@ class VqVae(LightningModule):
         z_e = self.encoder(z)
         z_e = self.encoder_norm(z_e.transpose(1, 2)).transpose(1, 2)
         if self.use_discretizer:
-            w, w_emb = self.discretizer(z_e)
+            w, w_emb, loss_codebook, loss_commit = self.discretizer(z_e)
         else:
             w, w_emb = None, z_e
         if not self.fit_autoencoder:
@@ -65,10 +68,10 @@ class VqVae(LightningModule):
             "loss_lm": self.k_w_given_language(w_logits, w, per_dim=True)
             if self.use_lm
             else 0.0,
-            "loss_codebook": F.mse_loss(z_e, w_emb.detach())
+            "loss_codebook": loss_codebook
             if self.use_discretizer and self.fit_autoencoder
             else 0.0,
-            "loss_commit": F.mse_loss(w_emb, z_e.detach())
+            "loss_commit": loss_commit
             if self.use_discretizer and self.fit_autoencoder
             else 0.0,
         }
@@ -90,6 +93,12 @@ class VqVae(LightningModule):
                 on_step=False,
                 on_epoch=True,
             )
+            self.log(
+                "train/MSE(z,z_mu)",
+                F.mse_loss(z, zpred_mu),
+                on_step=False,
+                on_epoch=True,
+            )
         if self.use_lm:
             self.log(
                 "train/K(w|language)",
@@ -105,7 +114,7 @@ class VqVae(LightningModule):
         z_e = self.encoder(z)
         z_e = self.encoder_norm(z_e.transpose(1, 2)).transpose(1, 2)
         if self.use_discretizer:
-            w, w_emb = self.discretizer(z_e)
+            w, w_emb, loss_codebook, loss_commit = self.discretizer(z_e)
         else:
             w, w_emb = None, z_e
         if self.use_lm:
@@ -120,11 +129,11 @@ class VqVae(LightningModule):
             "loss_lm": self.k_w_given_language(w_logits, w, per_dim=True)
             if self.use_lm
             else 0.0,
-            "loss_codebook": F.mse_loss(z_e, w_emb.detach())
-            if self.use_discretizer
+            "loss_codebook": loss_codebook
+            if self.use_discretizer and self.fit_autoencoder
             else 0.0,
-            "loss_commit": F.mse_loss(w_emb, z_e.detach())
-            if self.use_discretizer
+            "loss_commit": loss_commit
+            if self.use_discretizer and self.fit_autoencoder
             else 0.0,
         }
         loss = (
@@ -143,6 +152,7 @@ class VqVae(LightningModule):
                 "val/K(z|w,decoder)",
                 self.k_z_given_w_and_decoder(z, zpred_mu, zpred_logstd),
             )
+            self.log("val/MSE(z,z_mu)", F.mse_loss(z, zpred_mu))
         if self.use_lm:
             self.log("val/K(w|language)", self.k_w_given_language(w_logits, w))
 
@@ -156,10 +166,11 @@ class VqVae(LightningModule):
             < self.hparams.t_init + self.hparams.t_reestimate
         ):
             if (
-                self.current_epoch % self.hparams.p_reestimate == 0
-                and self.current_epoch > 0
-            ):
-                self.reestimate_word_embeddings()
+                self.current_epoch - self.hparams.t_init
+            ) % self.hparams.p_reestimate == 0 and self.current_epoch > 0:
+                self.discretizer.emb_table.weight.data = (
+                    self.reestimate_word_embeddings().clone()
+                )
 
     def set_training_phase(self) -> None:
         if self.current_epoch < self.hparams.t_init:
@@ -187,7 +198,7 @@ class VqVae(LightningModule):
             self.log("misc/phase", 0.0, on_step=False, on_epoch=True)
 
     @torch.inference_mode()
-    def reestimate_word_embeddings(self) -> None:
+    def reestimate_word_embeddings(self) -> torch.FloatTensor:
         z_es = []
         for z in self.trainer.datamodule.val_dataloader():
             z = z.to(self.device)
@@ -197,8 +208,8 @@ class VqVae(LightningModule):
         z_es = z_es.reshape(-1, z_es.shape[-1])  # (bs * num_tokens, emb_dim)
         kmeans = KMeans(n_clusters=self.discretizer.vocab_size, n_init="auto")
         w_emb = kmeans.fit(z_es).cluster_centers_
-        w_emb = torch.from_numpy(w_emb).to(self.device)
-        self.discretizer.emb_table.weight.data = w_emb
+        w_emb = torch.from_numpy(w_emb).float().to(self.device)
+        return w_emb
 
     def k_z_given_w_and_decoder(
         self,
@@ -266,10 +277,14 @@ class Discretizer(nn.Module):
             z_e (FloatTensor): (bs, num_tokens, emb_dim)
 
         Returns:
-            tuple[LongTensor, FloatTensor]: w - (bs, num_tokens), w_emb - (bs, num_tokens, emb_dim)
+            tuple[LongTensor, FloatTensor, FloatTensor, FloatTensor]:
+            w - (bs, num_tokens), w_emb - (bs, num_tokens, emb_dim),
+            loss_codebook - (), loss_commit - ()
         """
         distances = torch.cdist(z_e, self.emb_table.weight)
         w = torch.argmin(distances, dim=-1)
         w_emb = self.emb_table(w)
+        loss_codebook = F.mse_loss(w_emb, z_e.detach())
+        loss_commit = F.mse_loss(z_e, w_emb.detach())
         w_emb = z_e + (w_emb - z_e).detach()  # For straight-through gradient estimator
-        return w, w_emb
+        return w, w_emb, loss_codebook, loss_commit

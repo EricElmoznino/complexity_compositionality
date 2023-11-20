@@ -3,7 +3,7 @@ from typing import Literal
 import math
 import torch
 from torch import nn, FloatTensor
-from models.utils import learned_token_encodings, positional_token_encodings
+from models.utils import learned_token_encodings, positional_token_encodings, MLP
 
 
 class VqVaeDecoder(ABC, nn.Module):
@@ -113,3 +113,48 @@ class TransformerVqVaeDecoder(VqVaeDecoder):
             z_logstd = z_logstd[:, : -self.leftover_repr_dim]
 
         return z_mu, z_logstd
+
+
+class MLPVqVaeDecoder(VqVaeDecoder):
+    def __init__(
+        self,
+        emb_dim: int,
+        num_words: int,
+        repr_dim: int,
+        num_layers: int = 4,
+        hidden_dim: int = 256,
+        dropout: float = 0.0,
+        fixed_repr_std: float | None = 1.0,
+    ) -> None:
+        super().__init__(emb_dim=emb_dim, num_words=num_words)
+        assert (
+            repr_dim >= emb_dim * num_words
+        ), "repr_dim must be >= emb_dim * num_words"
+        self.fixed_repr_std = fixed_repr_std
+        num_outputs = repr_dim * 2 if fixed_repr_std is None else repr_dim
+        self.mlp = MLP(
+            num_inputs=num_words * emb_dim,
+            num_outputs=num_outputs,
+            num_layers=num_layers,
+            hidden_dim=hidden_dim,
+            dropout=dropout,
+        )
+
+    def forward(self, w_emb: FloatTensor) -> tuple[FloatTensor, FloatTensor]:
+        w_emb = w_emb.reshape(w_emb.shape[0], -1)
+        z_mu = self.mlp(w_emb)
+        if self.fixed_repr_std is None:
+            z_mu, z_logstd = z_mu.chunk(2, dim=1)
+        else:
+            z_logstd = math.log(self.fixed_repr_std) * torch.ones_like(z_mu)
+
+        return z_mu, z_logstd
+
+
+class IdentityVqVaeDecoder(VqVaeDecoder):
+    def __init__(self, emb_dim: int, num_words: int) -> None:
+        super().__init__(emb_dim=emb_dim, num_words=num_words)
+
+    def forward(self, w_emb: FloatTensor) -> tuple[FloatTensor, FloatTensor]:
+        w_emb = w_emb.reshape(w_emb.shape[0], -1)
+        return w_emb, torch.zeros_like(w_emb)
