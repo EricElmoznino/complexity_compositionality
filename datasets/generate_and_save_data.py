@@ -11,7 +11,6 @@ os.makedirs(data_folder_path, exist_ok=True)
 n_samples = 100000
 compositionality_dict = {}
 for vocab_size in [10]:
-for vocab_size in [10, 100]:
     for d in [256, 512, 1024]:
         for k in [2, 4, 8]:
             if k > d:
