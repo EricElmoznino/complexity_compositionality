@@ -176,9 +176,9 @@ class LookupTableDataGenerator(SimulatedDataGenerator):
         self.max_int = 1 / granularity
 
         np.random.seed(random_seed)
-
+        self.word_dim = self.get_word_dim()
         self.lookup_table = (
-            np.random.randint(2 * self.max_int + 1, size=(vocab_size, int(d / k)))
+            np.random.randint(2 * self.max_int + 1, size=(vocab_size, self.word_dim))
             / self.max_int
             - 1
         ).astype(np.float32)
@@ -189,7 +189,10 @@ class LookupTableDataGenerator(SimulatedDataGenerator):
         # Have to specify the bits for two integer numbers,
         # and the rest of p(w) has (small) constant complexity.
         return np.log(self.vocab_size) + np.log(self.k)
-
+    
+    def get_word_dim(self) -> int:
+        raise NotImplementedError()
+    
     def sample_w(self, n: int) -> np.ndarray:
         return np.random.randint(0, self.vocab_size, size=(n, self.k))
 
@@ -289,6 +292,9 @@ class LookupTableAdditionDataGenerator(LookupTableDataGenerator):
         # and the rest of p(z | w) has (small) constant complexity.
         return self.lookup_table.size * np.log(2 * self.max_int + 1) + np.log(self.k * self.d)
 
+    def get_word_dim(self) -> int:
+        return int(self.d / self.k)
+    
     def decode_w_perfectly(self, w: np.ndarray) -> np.ndarray:
         """Computes and returns the perfect (noiseless) decoding of z given w
         Args:
@@ -334,6 +340,9 @@ class LookupTableMultiplicationDataGenerator(LookupTableDataGenerator):
         # and the rest of p(z | w) has (small) constant complexity.
         return self.lookup_table.size * np.log(2 * self.max_int + 1) + np.log(self.k * self.d)
 
+    def get_word_dim(self) -> int:
+        return int(self.d / self.k)
+    
     def decode_w_perfectly(self, w: np.ndarray) -> np.ndarray:
         """Computes and returns the perfect (noiseless) decoding of z given w
         Args:
@@ -346,3 +355,69 @@ class LookupTableMultiplicationDataGenerator(LookupTableDataGenerator):
         return np.prod(
             reps, axis=0
         )
+    
+class LookupTableHierarchicalNonLinearDataGenerator(LookupTableDataGenerator):
+    def __init__(
+        self,
+        k: int,
+        d: int,
+        vocab_size: int,
+        nonlinearity = np.sin,
+        granularity: float = 0.01,
+        noise_scale: float = 0.001,
+        random_seed: int = 0,
+    ):
+        """Generates data in the following way
+        - Generate a lookup table of size (vocab_size, int(k)) such that we have a representation of dimension int(k) for each word
+        - Generate a sentence W by:
+            - sampling k words uniformly at random from the vocabulary.
+            - taking the corresponding representations from the lookup table and adding them
+            - adding noise sampled from a uniform distribution on [-noise_level, noise_level]
+
+        Args:
+            k (int): Number of words in a sentence.
+            d (int): Dimensionality of the final representation -> same as dimensionality of k in this case
+            vocab_size (int): Size of the vocabulary.
+            granularity (float): Granularity of the lookup table.
+            random_seed (int): Random seed for reproducibility
+        """
+        super().__init__(k, d, vocab_size, granularity, noise_scale, random_seed)
+        self.nonlinearity = nonlinearity
+
+    @property
+    def k_decoder(self) -> float:
+        # Have to specify the bits for all the numbers in the lookup table,
+        # And then the complexity of the decoding function is the number of layers in the hierarchy (log2(k))
+        # multiplied by the number of operations at each layer (~2 in this case)
+
+        return self.lookup_table.size * np.log(2 * self.max_int + 1) + np.log2(self.k) * 2
+
+    def get_word_dim(self) -> int:
+        return self.d
+    
+    def one_layer_hierarchy(self, curr_rep: np.ndarray) -> np.ndarray:
+        batch_size, n_words, word_dim = curr_rep.shape
+        curr_rep = curr_rep.reshape(batch_size, 2, int(n_words/2), word_dim)
+        curr_rep = self.nonlinearity(curr_rep.sum(axis=1))
+        return curr_rep
+
+
+    def decode_w_perfectly(self, w: np.ndarray) -> np.ndarray:
+        """Computes and returns the perfect (noiseless) decoding of z given w
+        Args:
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            np.ndarray: (n, d) float matrix of representations z.
+        """
+        reps = [self.lookup_table[w[:, i]] for i in range(self.k)]
+        reps = np.array(reps).transpose(1, 0, 2)
+        while reps.shape[1] > 1:
+            reps = self.one_layer_hierarchy(reps)
+        return reps.squeeze()
+                   
+        
+# data_gen = LookupTableHierarchicalNonLinearDataGenerator(k=32, d=256, vocab_size=10)
+# w, z = data_gen.sample(10)
+# print(data_gen.k_z(z, w, per_sample=True))
+# print(data_gen.compositionality(z, w))
