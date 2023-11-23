@@ -20,6 +20,7 @@ venv.bak/
 logs/*
 data/*
 commands.txt
+wandb
 
 # Keep
 !.gitkeep

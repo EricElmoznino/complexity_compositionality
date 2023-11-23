@@ -1,0 +1,58 @@
+name: "VQ-VAE-Simulated-Uniform"
+
+framework:
+  _target_: frameworks.vqvae.VqVae
+  beta_lm:  1.0
+  beta_codebook: 1.0
+  beta_commit: 1.0
+  lr: 0.001
+  lr_lm: null
+  lr_discretizer: null
+  t_init: 0
+  t_reestimate: 0 #10
+  p_reestimate: 2
+  t_lm: 0 # 20
+  vocab_size: 100
+  encoder:
+    _target_: models.encoders.TransformerVqVaeEncoder
+    emb_dim: 64
+    num_words: 8
+    repr_dim: 256
+    num_heads: 2
+    num_layers: 4
+    mlp_hidden_dim: null
+    dropout: 0.0
+    token_encoding_type: "learned"
+  decoder:
+    _target_: models.decoders.TransformerVqVaeDecoder
+    emb_dim: ${..encoder.emb_dim}
+    num_words: ${..encoder.num_words}
+    repr_dim: ${..encoder.repr_dim}
+    num_heads: ${..encoder.num_heads}
+    num_layers: ${..encoder.num_layers}
+    mlp_hidden_dim: ${..encoder.mlp_hidden_dim}
+    dropout: ${..encoder.dropout}
+    token_encoding_type: ${..encoder.token_encoding_type}
+    fixed_repr_std: 1.0
+  lm:
+    _target_: models.language_models.TransformerVqVaeLM
+    emb_dim: ${..encoder.emb_dim}
+    num_words: ${..encoder.num_words}
+    num_heads: ${..encoder.num_heads}
+    num_layers: ${..encoder.num_layers}
+    mlp_hidden_dim: ${..encoder.mlp_hidden_dim}
+    dropout: ${..encoder.dropout}
+    word_encoding_type: "learned"
+    embedding_lookup_type: "linear"
+    
+data:
+  _target_: datasets.data_modules.TensorDataModule
+  train_filepath: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/data/simulated/uniform/vocab_size=100_d=256_k=32_nsamples=100000/z_train.pt"
+  val_filepath: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/data/simulated/uniform/vocab_size=100_d=256_k=32_nsamples=100000/z_test.pt"
+  batch_size: 64
+  num_workers: 4
+
+trainer:
+  max_epochs: 1000
+
+callbacks: False
