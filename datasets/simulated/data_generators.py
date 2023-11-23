@@ -144,9 +144,9 @@ class SimulatedDataGenerator(ABC):
 ##############################################################
 ########## Subclasses for different data generators ##########
 ##############################################################
+    
 
-
-class UniformDataGenerator(SimulatedDataGenerator):
+class LookupTableDataGenerator(SimulatedDataGenerator):
     def __init__(
         self,
         k: int,
@@ -190,12 +190,6 @@ class UniformDataGenerator(SimulatedDataGenerator):
         # and the rest of p(w) has (small) constant complexity.
         return np.log(self.vocab_size) + np.log(self.k)
 
-    @property
-    def k_decoder(self) -> float:
-        # Have to specify the bits for all the numbers in the lookup table,
-        # and the rest of p(z | w) has (small) constant complexity.
-        return self.lookup_table.size * np.log(2 * self.max_int + 1)
-
     def sample_w(self, n: int) -> np.ndarray:
         return np.random.randint(0, self.vocab_size, size=(n, self.k))
 
@@ -206,6 +200,49 @@ class UniformDataGenerator(SimulatedDataGenerator):
         ).astype(np.float32)
 
         return pure_samples + noise
+
+    def logp_w(self, w: np.ndarray) -> np.ndarray:
+        return np.ones_like(w, dtype=np.float32) * np.log(1 / self.vocab_size) * self.k
+
+    def logp_z_given_w(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
+        batch_size, _ = z.shape
+        means = self.decode_w_perfectly(w)
+
+        int_noise = ((z - means) / self.noise_scale).astype(int)
+        return np.array(
+            [skellam.logpmf(int_noise[i], mu1=0.5, mu2=0.5) for i in range(batch_size)]
+        ).astype(np.float32)
+
+class LookupTableConcatenationDataGenerator(LookupTableDataGenerator):
+    def __init__(
+    self,
+    k: int,
+    d: int,
+    vocab_size: int,
+    granularity: float = 0.01,
+    noise_scale: float = 0.001,
+    random_seed: int = 0,
+        ):
+            """Generates data in the following way
+            - Generate a lookup table of size (vocab_size, int(k)) such that we have a representation of dimension int(k) for each word
+            - Generate a sentence W by:
+                - sampling k words uniformly at random from the vocabulary.
+                - taking the corresponding representations from the lookup table and summing them
+                - adding noise sampled from a uniform distribution on [-noise_level, noise_level]
+
+            Args:
+                k (int): Number of words in a sentence.
+                d (int): Dimensionality of the final representation -> same as dimensionality of k in this case
+                vocab_size (int): Size of the vocabulary.
+                granularity (float): Granularity of the lookup table.
+                random_seed (int): Random seed for reproducibility
+            """
+            super().__init__(k, d, vocab_size, granularity, noise_scale, random_seed)
+    @property
+    def k_decoder(self) -> float:
+        # Have to specify the bits for all the numbers in the lookup table,
+        # and the rest of p(z | w) has (small) constant complexity.
+        return self.lookup_table.size * np.log(2 * self.max_int + 1)
 
     def decode_w_perfectly(self, w: np.ndarray) -> np.ndarray:
         """Computes and returns the perfect (noiseless) decoding of z given w
@@ -219,15 +256,93 @@ class UniformDataGenerator(SimulatedDataGenerator):
         return np.concatenate(
             [self.lookup_table[w[:, i]] for i in range(self.k)], axis=1
         )
+        
+class LookupTableAdditionDataGenerator(LookupTableDataGenerator):
+    def __init__(
+        self,
+        k: int,
+        d: int,
+        vocab_size: int,
+        granularity: float = 0.01,
+        noise_scale: float = 0.001,
+        random_seed: int = 0,
+    ):
+        """Generates data in the following way
+        - Generate a lookup table of size (vocab_size, int(k)) such that we have a representation of dimension int(k) for each word
+        - Generate a sentence W by:
+            - sampling k words uniformly at random from the vocabulary.
+            - taking the corresponding representations from the lookup table and summing them
+            - adding noise sampled from a uniform distribution on [-noise_level, noise_level]
 
-    def logp_w(self, w: np.ndarray) -> np.ndarray:
-        return np.ones_like(w, dtype=np.float32) * np.log(1 / self.vocab_size) * self.k
+        Args:
+            k (int): Number of words in a sentence.
+            d (int): Dimensionality of the final representation -> same as dimensionality of k in this case
+            vocab_size (int): Size of the vocabulary.
+            granularity (float): Granularity of the lookup table.
+            random_seed (int): Random seed for reproducibility
+        """
+        super().__init__(k, d, vocab_size, granularity, noise_scale, random_seed)
 
-    def logp_z_given_w(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
-        batch_size, _ = z.shape
-        means = self.decode_w_perfectly(w)
+    @property
+    def k_decoder(self) -> float:
+        # Have to specify the bits for all the numbers in the lookup table,
+        # and the rest of p(z | w) has (small) constant complexity.
+        return self.lookup_table.size * np.log(2 * self.max_int + 1) + np.log(self.k * self.d)
 
-        int_noise = ((z - means) / self.noise_scale).astype(int)
-        return np.array(
-            [skellam.logpmf(int_noise[i], mu1=0.5, mu2=0.5) for i in range(batch_size)]
-        ).astype(np.float32)
+    def decode_w_perfectly(self, w: np.ndarray) -> np.ndarray:
+        """Computes and returns the perfect (noiseless) decoding of z given w
+        Args:
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            np.ndarray: (n, d) float matrix of representations z.
+        """
+        reps = [self.lookup_table[w[:, i]] for i in range(self.k)]
+        return np.sum(
+            reps, axis=0
+        )
+
+class LookupTableMultiplicationDataGenerator(LookupTableDataGenerator):
+    def __init__(
+        self,
+        k: int,
+        d: int,
+        vocab_size: int,
+        granularity: float = 0.01,
+        noise_scale: float = 0.001,
+        random_seed: int = 0,
+    ):
+        """Generates data in the following way
+        - Generate a lookup table of size (vocab_size, int(k)) such that we have a representation of dimension int(k) for each word
+        - Generate a sentence W by:
+            - sampling k words uniformly at random from the vocabulary.
+            - taking the corresponding representations from the lookup table and multiplying them
+            - adding noise sampled from a uniform distribution on [-noise_level, noise_level]
+
+        Args:
+            k (int): Number of words in a sentence.
+            d (int): Dimensionality of the final representation -> same as dimensionality of k in this case
+            vocab_size (int): Size of the vocabulary.
+            granularity (float): Granularity of the lookup table.
+            random_seed (int): Random seed for reproducibility
+        """
+        super().__init__(k, d, vocab_size, granularity, noise_scale, random_seed)
+
+    @property
+    def k_decoder(self) -> float:
+        # Have to specify the bits for all the numbers in the lookup table,
+        # and the rest of p(z | w) has (small) constant complexity.
+        return self.lookup_table.size * np.log(2 * self.max_int + 1) + np.log(self.k * self.d)
+
+    def decode_w_perfectly(self, w: np.ndarray) -> np.ndarray:
+        """Computes and returns the perfect (noiseless) decoding of z given w
+        Args:
+            w (np.ndarray): (n, k) integer matrix of sentences W.
+
+        Returns:
+            np.ndarray: (n, d) float matrix of representations z.
+        """
+        reps = [self.lookup_table[w[:, i]] for i in range(self.k)]
+        return np.prod(
+            reps, axis=0
+        )
