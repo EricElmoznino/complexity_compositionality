@@ -2,6 +2,7 @@ import torch
 from torch import nn, FloatTensor, LongTensor
 from torch.nn import functional as F
 from lightning import LightningModule
+import wandb
 import numpy as np
 from sklearn.cluster import KMeans
 from models.encoders import VqVaeEncoder
@@ -43,14 +44,21 @@ class VqVae(LightningModule):
         self.use_lm = True
         self.fit_autoencoder = True
 
+        # For word usage statistics
+        self.train_word_usage = torch.zeros(
+            self.encoder.num_words, vocab_size, dtype=torch.int64
+        )
+        self.val_word_usage = torch.zeros(
+            self.encoder.num_words, vocab_size, dtype=torch.int64
+        )
+
     def training_step(self, z: FloatTensor, batch_idx: int) -> FloatTensor:
         # Get predictions
         z_e = self.encoder(z)
         z_e = self.encoder_norm(z_e.transpose(1, 2)).transpose(1, 2)
-        if self.use_discretizer:
-            w, w_emb, loss_codebook, loss_commit = self.discretizer(z_e)
-        else:
-            w, w_emb = None, z_e
+        w, w_emb, loss_codebook, loss_commit = self.discretizer(z_e)
+        if not self.use_discretizer:
+            w_emb = z_e
         if not self.fit_autoencoder:
             w_emb = w_emb.detach()
         if self.use_lm:
@@ -106,6 +114,7 @@ class VqVae(LightningModule):
                 on_step=False,
                 on_epoch=True,
             )
+        self.train_word_usage += F.one_hot(w, self.hparams.vocab_size).sum(dim=0)
 
         return loss
 
@@ -113,10 +122,9 @@ class VqVae(LightningModule):
         # Get predictions
         z_e = self.encoder(z)
         z_e = self.encoder_norm(z_e.transpose(1, 2)).transpose(1, 2)
-        if self.use_discretizer:
-            w, w_emb, loss_codebook, loss_commit = self.discretizer(z_e)
-        else:
-            w, w_emb = None, z_e
+        w, w_emb, loss_codebook, loss_commit = self.discretizer(z_e)
+        if not self.use_discretizer:
+            w_emb = z_e
         if self.use_lm:
             w_logits = self.lm(w_emb, self.discretizer.emb_table)
         zpred_mu, zpred_logstd = self.decoder(w_emb)
@@ -155,8 +163,13 @@ class VqVae(LightningModule):
             self.log("val/MSE(z,z_mu)", F.mse_loss(z, zpred_mu))
         if self.use_lm:
             self.log("val/K(w|language)", self.k_w_given_language(w_logits, w))
+        self.val_word_usage += F.one_hot(w, self.hparams.vocab_size).sum(dim=0)
 
         return loss
+
+    def on_fit_start(self) -> None:
+        self.train_word_usage = self.train_word_usage.to(self.device)
+        self.val_word_usage = self.val_word_usage.to(self.device)
 
     def on_train_epoch_start(self) -> None:
         self.set_training_phase()
@@ -171,6 +184,46 @@ class VqVae(LightningModule):
                 self.discretizer.emb_table.weight.data = (
                     self.reestimate_word_embeddings().clone()
                 )
+
+    def on_train_epoch_end(self) -> None:
+        if self.logger is not None:
+            self.log_word_usage("train")
+        self.train_word_usage[:, :] = 0
+
+    def on_validation_epoch_end(self) -> None:
+        if self.logger is not None:
+            self.log_word_usage("val")
+        self.val_word_usage[:, :] = 0
+
+    def k_z_given_w_and_decoder(
+        self,
+        z: FloatTensor,
+        zpred_mu: FloatTensor,
+        zpred_logstd: FloatTensor,
+        per_dim: bool = False,
+    ) -> torch.FloatTensor:
+        dist = torch.distributions.Normal(zpred_mu, zpred_logstd.exp())
+        k = -dist.log_prob(z)
+        if per_dim:
+            k = k.mean(dim=tuple(range(1, z.ndim)))
+        else:
+            k = k.sum(dim=tuple(range(1, z.ndim)))
+        k = k.mean()
+        return k
+
+    def k_w_given_language(
+        self,
+        w_logits: FloatTensor,
+        w: LongTensor,
+        per_dim: bool = False,
+    ) -> torch.FloatTensor:
+        k = F.cross_entropy(w_logits.transpose(1, 2), w, reduction="none")
+        if per_dim:
+            k = k.mean(dim=-1)
+        else:
+            k = k.sum(dim=-1)
+        k = k.mean()
+        return k
 
     def set_training_phase(self) -> None:
         if self.current_epoch < self.hparams.t_init:
@@ -211,35 +264,18 @@ class VqVae(LightningModule):
         w_emb = torch.from_numpy(w_emb).float().to(self.device)
         return w_emb
 
-    def k_z_given_w_and_decoder(
-        self,
-        z: FloatTensor,
-        zpred_mu: FloatTensor,
-        zpred_logstd: FloatTensor,
-        per_dim: bool = False,
-    ) -> torch.FloatTensor:
-        dist = torch.distributions.Normal(zpred_mu, zpred_logstd.exp())
-        k = -dist.log_prob(z)
-        if per_dim:
-            k = k.mean(dim=tuple(range(1, z.ndim)))
-        else:
-            k = k.sum(dim=tuple(range(1, z.ndim)))
-        k = k.mean()
-        return k
-
-    def k_w_given_language(
-        self,
-        w_logits: FloatTensor,
-        w: LongTensor,
-        per_dim: bool = False,
-    ) -> torch.FloatTensor:
-        k = F.cross_entropy(w_logits.transpose(1, 2), w, reduction="none")
-        if per_dim:
-            k = k.mean(dim=-1)
-        else:
-            k = k.sum(dim=-1)
-        k = k.mean()
-        return k
+    def log_word_usage(self, stage: str) -> None:
+        data = self.train_word_usage if stage == "train" else self.val_word_usage
+        data = data.float() / data.sum(dim=-1, keepdim=True)
+        data = [
+            [sent_pos, vocab_id, data[sent_pos, vocab_id].item()]
+            for sent_pos in range(data.shape[0])
+            for vocab_id in range(data.shape[1])
+        ]
+        table = wandb.Table(
+            data=data, columns=["Sentence position", "Token ID", "Frequency"]
+        )
+        self.logger.experiment.log({"misc/word_frequencies": table})
 
     def configure_optimizers(self):
         lr_discretizer = (
