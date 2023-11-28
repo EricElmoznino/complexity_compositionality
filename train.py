@@ -6,12 +6,10 @@ warnings.filterwarnings("ignore", ".*does not have many workers.*")
 
 import wandb
 
+
 @hydra.main(config_path="./configs/", config_name="train", version_base=None)
 def train(cfg):
     seed_everything(cfg.seed)
-    print(cfg)
-    print(cfg.experiment.name)
-    wandb.init(entity="thomasjiralerspong", name=cfg.experiment.name, group="debug", dir="/network/scratch/t/thomas.jiralerspong/kolmogorov/wandb")
     framework = hydra.utils.instantiate(cfg.experiment.framework)
     datamodule = hydra.utils.instantiate(cfg.experiment.data)
     logger = hydra.utils.instantiate(cfg.logger) if cfg.logger else False
