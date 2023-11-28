@@ -1,3 +1,4 @@
+from typing import Literal
 import torch
 from torch import nn, FloatTensor, LongTensor
 from torch.nn import functional as F
@@ -11,6 +12,8 @@ from models.language_models import VqVaeLM
 
 
 class VqVae(LightningModule):
+    DiscretizerType = Literal["straight_through", "gumbel_softmax"]
+
     def __init__(
         self,
         encoder: VqVaeEncoder,
@@ -28,16 +31,25 @@ class VqVae(LightningModule):
         p_reestimate: int = 2,
         t_lm: int = 20,
         encoder_norm: bool = True,
+        discretizer: str = "straight_through",
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["encoder", "decoder", "lm"])
         self.encoder = encoder
         self.decoder = decoder
         self.lm = lm
-        self.discretizer = Discretizer(self.hparams.vocab_size, self.encoder.emb_dim)
-        self.encoder_norm = (
-            nn.BatchNorm1d(self.encoder.emb_dim) if encoder_norm else nn.Identity()
-        )
+        if discretizer == "straight_through":
+            self.discretizer = StraightThroughDiscretizer(
+                self.hparams.vocab_size, self.encoder.emb_dim
+            )
+        else:
+            self.discretizer = GumbelSoftmaxDiscretizer(
+                self.hparams.vocab_size, self.encoder.emb_dim
+            )
+        if self.hparams.encoder_norm:
+            self.encoder_norm = nn.BatchNorm1d(self.encoder.emb_dim)
+        else:
+            self.encoder_norm = nn.Identity()
 
         # At different stages of training, we want to enable/disable different parts
         self.use_discretizer = True
@@ -299,7 +311,7 @@ class VqVae(LightningModule):
         return optimizer
 
 
-class Discretizer(nn.Module):
+class StraightThroughDiscretizer(nn.Module):
     def __init__(self, vocab_size: int, emb_dim: int) -> None:
         super().__init__()
         self.vocab_size = vocab_size
@@ -323,4 +335,37 @@ class Discretizer(nn.Module):
         loss_codebook = F.mse_loss(w_emb, z_e.detach())
         loss_commit = F.mse_loss(z_e, w_emb.detach())
         w_emb = z_e + (w_emb - z_e).detach()  # For straight-through gradient estimator
+        return w, w_emb, loss_codebook, loss_commit
+
+
+class GumbelSoftmaxDiscretizer(nn.Module):
+    def __init__(self, vocab_size: int, emb_dim: int) -> None:
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.emb_dim = emb_dim
+        self.emb_table = nn.Embedding(vocab_size, emb_dim)
+        self.emb_table.weight.data.normal_()
+
+    def forward(self, z_e: FloatTensor) -> tuple[LongTensor, FloatTensor]:
+        """
+        Args:
+            z_e (FloatTensor): (bs, num_tokens, emb_dim)
+
+        Returns:
+            tuple[LongTensor, FloatTensor, FloatTensor, FloatTensor]:
+            w - (bs, num_tokens), w_emb - (bs, num_tokens, emb_dim),
+            loss_codebook - (), loss_commit - ()
+        """
+        distances = torch.cdist(z_e, self.emb_table.weight)
+        if self.training:
+            w_onehot = F.gumbel_softmax(-distances, tau=1.0, hard=False, dim=-1)
+            w = torch.argmax(w_onehot, dim=-1)
+        else:
+            w = torch.argmin(distances, dim=-1)
+            w_emb = self.emb_table(w)
+        w_emb = self.emb_table(w)
+        loss_codebook = F.mse_loss(w_emb, z_e.detach())
+        loss_commit = F.mse_loss(z_e, w_emb.detach())
+        if self.training:
+            w_emb = w_onehot @ self.emb_table.weight  # For gumbel gradient estimator
         return w, w_emb, loss_codebook, loss_commit

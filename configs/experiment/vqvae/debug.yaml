@@ -14,16 +14,17 @@ framework:
   t_lm: 0
   vocab_size: 10
   encoder_norm: True
-  encoder:
-    _target_: models.encoders.TransformerVqVaeEncoder
-    emb_dim: 64
-    num_words: 4
-    repr_dim: 256
-    num_heads: 2
-    num_layers: 4
-    mlp_hidden_dim: null
-    dropout: 0.0
-    token_encoding_type: "learned"
+  discretizer: "straight_through"
+  # encoder:
+  #   _target_: models.encoders.TransformerVqVaeEncoder
+  #   emb_dim: 64
+  #   num_words: 4
+  #   repr_dim: 256
+  #   num_heads: 2
+  #   num_layers: 4
+  #   mlp_hidden_dim: null
+  #   dropout: 0.0
+  #   token_encoding_type: "learned"
   # decoder:
   #   _target_: models.decoders.TransformerVqVaeDecoder
   #   emb_dim: ${..encoder.emb_dim}
@@ -35,13 +36,13 @@ framework:
   #   dropout: ${..encoder.dropout}
   #   token_encoding_type: ${..encoder.token_encoding_type}
   #   fixed_repr_std: 1.0
-  # encoder:
-  #   _target_: models.encoders.MLPVqVaeEncoder
-  #   emb_dim: 64
-  #   num_words: 4
-  #   repr_dim: 256
-  #   num_layers: 3
-  #   hidden_dim: 256
+  encoder:
+    _target_: models.encoders.MLPVqVaeEncoder
+    emb_dim: 64
+    num_words: 4
+    repr_dim: 256
+    num_layers: 3
+    hidden_dim: 256
   # decoder:
   #   _target_: models.decoders.MLPVqVaeDecoder
   #   emb_dim: ${..encoder.emb_dim}
