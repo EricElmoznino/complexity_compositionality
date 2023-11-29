@@ -1,0 +1,95 @@
+name: "VQ-VAE-Debug-MNIST"
+
+framework:
+  _target_: frameworks.vqvae.VqVae
+  beta_lm:  0.0
+  beta_codebook: 1.0
+  beta_commit: 0.25
+  lr: 0.001
+  lr_lm: null
+  lr_discretizer: null
+  t_init: 5
+  t_reestimate: 10
+  p_reestimate: 2
+  t_lm: 0
+  vocab_size: 64
+  encoder_norm: True
+  discretizer: "straight_through"
+  encoder:
+    _target_: models.encoders.CNNVqVaeEncoder
+    emb_dim: 64
+    num_words: 9
+    cnn:
+      _target_: torch.nn.Sequential
+      _args_:
+        - _target_: torch.nn.Conv2d
+          in_channels: 1
+          out_channels: 64
+          kernel_size: 4
+          stride: 2
+          padding: 1
+        - _target_: torch.nn.ReLU
+        - _target_: torch.nn.Conv2d
+          in_channels: 64
+          out_channels: 128
+          kernel_size: 4
+          stride: 2
+          padding: 1
+        - _target_: torch.nn.ReLU
+        - _target_: torch.nn.Conv2d
+          in_channels: 128
+          out_channels: ${.....encoder.emb_dim}
+          kernel_size: 4
+          stride: 2
+          padding: 1
+  decoder:
+    _target_: models.decoders.CNNVqVaeDecoder
+    emb_dim: ${..encoder.emb_dim}
+    num_words: ${..encoder.num_words}
+    fixed_repr_std: 1.0
+    cnn:
+      _target_: torch.nn.Sequential
+      _args_:
+        - _target_: torch.nn.ConvTranspose2d
+          in_channels: ${.....encoder.emb_dim}
+          out_channels: 128
+          kernel_size: 4
+          stride: 2
+          padding: 1
+          output_padding: 1
+        - _target_: torch.nn.ReLU
+        - _target_: torch.nn.ConvTranspose2d
+          in_channels: 128
+          out_channels: 64
+          kernel_size: 4
+          stride: 2
+          padding: 1
+        - _target_: torch.nn.ReLU
+        - _target_: torch.nn.ConvTranspose2d
+          in_channels: 64
+          out_channels: 1
+          kernel_size: 4
+          stride: 2
+          padding: 1
+        - _target_: torch.nn.Tanh
+  lm:
+    _target_: models.language_models.TransformerVqVaeLM
+    emb_dim: ${..encoder.emb_dim}
+    num_words: ${..encoder.num_words}
+    num_heads: 2
+    num_layers: 2
+    mlp_hidden_dim: null
+    dropout: 0.0
+    word_encoding_type: "learned"
+    embedding_lookup_type: "linear"
+    
+data:
+  _target_: datasets.data_modules.MNISTDataModule
+  data_path: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/mnist"
+  batch_size: 64
+  num_workers: 4
+
+trainer:
+  max_epochs: 50
+
+callbacks: False

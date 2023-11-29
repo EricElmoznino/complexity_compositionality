@@ -135,3 +135,20 @@ class MLPVqVaeEncoder(VqVaeEncoder):
         w_emb = self.mlp(z)
         w_emb = w_emb.view(z.shape[0], self.num_words, self.emb_dim)
         return w_emb
+
+
+class CNNVqVaeEncoder(VqVaeEncoder):
+    def __init__(
+        self,
+        emb_dim: int,
+        num_words: int,
+        cnn: nn.Module,
+    ) -> None:
+        super().__init__(emb_dim=emb_dim, num_words=num_words)
+        self.cnn = cnn
+
+    def forward(self, z: FloatTensor) -> FloatTensor:
+        w_emb = self.cnn(z)
+        w_emb = w_emb.view(w_emb.shape[0], self.emb_dim, self.num_words)
+        w_emb = w_emb.transpose(1, 2)
+        return w_emb

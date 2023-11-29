@@ -147,7 +147,35 @@ class MLPVqVaeDecoder(VqVaeDecoder):
             z_mu, z_logstd = z_mu.chunk(2, dim=1)
         else:
             z_logstd = math.log(self.fixed_repr_std) * torch.ones_like(z_mu)
+        return z_mu, z_logstd
 
+
+class CNNVqVaeDecoder(VqVaeDecoder):
+    def __init__(
+        self,
+        emb_dim: int,
+        num_words: int,
+        cnn: nn.Module,
+        fixed_repr_std: float | None = 1.0,
+        w_spatial_shape: tuple[int, int] | None = None,
+    ) -> None:
+        super().__init__(emb_dim=emb_dim, num_words=num_words)
+        self.cnn = cnn
+        self.fixed_repr_std = fixed_repr_std
+        self.w_spatial_shape = w_spatial_shape
+
+    def forward(self, w_emb: FloatTensor) -> tuple[FloatTensor, FloatTensor]:
+        if self.w_spatial_shape is None:
+            h, w = int(self.num_words**0.5), int(self.num_words**0.5)
+        else:
+            h, w = self.w_spatial_shape
+        w_emb = w_emb.transpose(1, 2)
+        w_emb = w_emb.reshape(w_emb.shape[0], self.emb_dim, h, w)
+        z_mu = self.cnn(w_emb)
+        if self.fixed_repr_std is None:
+            z_mu, z_logstd = z_mu.chunk(2, dim=1)
+        else:
+            z_logstd = math.log(self.fixed_repr_std) * torch.ones_like(z_mu)
         return z_mu, z_logstd
 
 
