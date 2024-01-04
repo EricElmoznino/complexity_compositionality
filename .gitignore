@@ -16,6 +16,7 @@ env.bak/
 venv.bak/
 
 # Custom
+.DS_Store
 .vscode
 logs/*
 data/*
