@@ -30,6 +30,6 @@ def train(cfg):
 
 if __name__ == "__main__":
     """Run with:
-    `python train.py experiment=vqvae/[experiment_name].yaml [overrides]`
+    `python train.py experiment=[experiment_folder]/[experiment_name].yaml [overrides]`
     """
     train()

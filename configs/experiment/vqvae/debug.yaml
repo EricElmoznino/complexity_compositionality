@@ -67,7 +67,7 @@ framework:
     embedding_lookup_type: "linear"
     
 data:
-  _target_: datasets.data_modules.TensorDataModule
+  _target_: datasets.tensor_data.TensorDataModule
   train_filepath: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/simulated/uniform/vocab_size=10_d=256_k=4_nsamples=100000/z_train.pt"
   val_filepath: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/simulated/uniform/vocab_size=10_d=256_k=4_nsamples=100000/z_test.pt"
   batch_size: 64

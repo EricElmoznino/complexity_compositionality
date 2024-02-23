@@ -12,3 +12,4 @@ logger:
   project: "Complexity - ${experiment.name}"
   save_dir: ${save_dir}
   offline: False
+  tags: null
