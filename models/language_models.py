@@ -5,7 +5,12 @@ from torch import nn, FloatTensor
 from models.utils import learned_token_encodings, positional_token_encodings
 
 
-class VqVaeLM(ABC, nn.Module):
+##############################################################
+####################### Embedding LMs ########################
+##############################################################
+
+
+class EmbeddingLM(ABC, nn.Module):
     def __init__(self, emb_dim: int, num_words: int) -> None:
         super().__init__()
         self.emb_dim = emb_dim
@@ -29,12 +34,7 @@ class VqVaeLM(ABC, nn.Module):
         pass
 
 
-##############################################################
-################ Subclasses for different LMs ################
-##############################################################
-
-
-class TransformerVqVaeLM(VqVaeLM):
+class TransformerEmbeddingLM(EmbeddingLM):
     TokenEncodingType = Literal["learned", "positional"]
     EmbeddingLookupType = Literal["linear", "distance"]
 

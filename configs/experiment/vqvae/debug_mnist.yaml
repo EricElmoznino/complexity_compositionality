@@ -16,7 +16,7 @@ framework:
   encoder_norm: True
   discretizer: "straight_through"
   encoder:
-    _target_: models.encoders.CNNVqVaeEncoder
+    _target_: models.encoders.CNNEmbeddingEncoder
     emb_dim: 64
     num_words: 9
     cnn:
@@ -43,7 +43,7 @@ framework:
           stride: 2
           padding: 1
   decoder:
-    _target_: models.decoders.CNNVqVaeDecoder
+    _target_: models.decoders.CNNEmbeddingDecoder
     emb_dim: ${..encoder.emb_dim}
     num_words: ${..encoder.num_words}
     fixed_repr_std: 1.0
@@ -73,7 +73,7 @@ framework:
           padding: 1
         - _target_: torch.nn.Tanh
   lm:
-    _target_: models.language_models.TransformerVqVaeLM
+    _target_: models.language_models.TransformerEmbeddingLM
     emb_dim: ${..encoder.emb_dim}
     num_words: ${..encoder.num_words}
     num_heads: 2

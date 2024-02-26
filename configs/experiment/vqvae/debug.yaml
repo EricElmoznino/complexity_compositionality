@@ -16,7 +16,7 @@ framework:
   encoder_norm: True
   discretizer: "straight_through"
   # encoder:
-  #   _target_: models.encoders.TransformerVqVaeEncoder
+  #   _target_: models.encoders.TransformerEmbeddingEncoder
   #   emb_dim: 64
   #   num_words: 4
   #   repr_dim: 256
@@ -26,7 +26,7 @@ framework:
   #   dropout: 0.0
   #   token_encoding_type: "learned"
   # decoder:
-  #   _target_: models.decoders.TransformerVqVaeDecoder
+  #   _target_: models.decoders.TransformerEmbeddingDecoder
   #   emb_dim: ${..encoder.emb_dim}
   #   num_words: ${..encoder.num_words}
   #   repr_dim: ${..encoder.repr_dim}
@@ -37,14 +37,14 @@ framework:
   #   token_encoding_type: ${..encoder.token_encoding_type}
   #   fixed_repr_std: 1.0
   encoder:
-    _target_: models.encoders.MLPVqVaeEncoder
+    _target_: models.encoders.MLPEmbeddingEncoder
     emb_dim: 64
     num_words: 4
     repr_dim: 256
     num_layers: 3
     hidden_dim: 256
   # decoder:
-  #   _target_: models.decoders.MLPVqVaeDecoder
+  #   _target_: models.decoders.MLPEmbeddingDecoder
   #   emb_dim: ${..encoder.emb_dim}
   #   num_words: ${..encoder.num_words}
   #   repr_dim: ${..encoder.repr_dim}
@@ -52,11 +52,11 @@ framework:
   #   hidden_dim: ${..encoder.hidden_dim}
   #   fixed_repr_std: 1.0
   decoder:
-    _target_: models.decoders.IdentityVqVaeDecoder
+    _target_: models.decoders.IdentityEmbeddingDecoder
     emb_dim: ${..encoder.emb_dim}
     num_words: ${..encoder.num_words}
   lm:
-    _target_: models.language_models.TransformerVqVaeLM
+    _target_: models.language_models.TransformerEmbeddingLM
     emb_dim: ${..encoder.emb_dim}
     num_words: ${..encoder.num_words}
     num_heads: 2

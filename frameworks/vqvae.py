@@ -6,9 +6,9 @@ from lightning import LightningModule
 import wandb
 import numpy as np
 from sklearn.cluster import KMeans
-from models.encoders import VqVaeEncoder
-from models.decoders import VqVaeDecoder
-from models.language_models import VqVaeLM
+from models.encoders import EmbeddingEncoder
+from models.decoders import EmbeddingDecoder
+from models.language_models import EmbeddingLM
 
 
 class VqVae(LightningModule):
@@ -16,9 +16,9 @@ class VqVae(LightningModule):
 
     def __init__(
         self,
-        encoder: VqVaeEncoder,
-        decoder: VqVaeDecoder,
-        lm: VqVaeLM,
+        encoder: EmbeddingEncoder,
+        decoder: EmbeddingDecoder,
+        lm: EmbeddingLM,
         vocab_size: int,
         beta_lm: float = 1.0,
         beta_codebook: float = 1.0,
@@ -80,20 +80,22 @@ class VqVae(LightningModule):
 
         # Compute losses
         losses = {
-            "loss_recon": self.k_z_given_w_and_decoder(
-                z, zpred_mu, zpred_logstd, per_dim=True
-            )
-            if self.fit_autoencoder
-            else 0.0,
-            "loss_lm": self.k_w_given_language(w_logits, w, per_dim=True)
-            if self.use_lm
-            else 0.0,
-            "loss_codebook": loss_codebook
-            if self.use_discretizer and self.fit_autoencoder
-            else 0.0,
-            "loss_commit": loss_commit
-            if self.use_discretizer and self.fit_autoencoder
-            else 0.0,
+            "loss_recon": (
+                self.k_z_given_w_and_decoder(z, zpred_mu, zpred_logstd, per_dim=True)
+                if self.fit_autoencoder
+                else 0.0
+            ),
+            "loss_lm": (
+                self.k_w_given_language(w_logits, w, per_dim=True)
+                if self.use_lm
+                else 0.0
+            ),
+            "loss_codebook": (
+                loss_codebook if self.use_discretizer and self.fit_autoencoder else 0.0
+            ),
+            "loss_commit": (
+                loss_commit if self.use_discretizer and self.fit_autoencoder else 0.0
+            ),
         }
         loss = (
             losses["loss_recon"]
@@ -146,15 +148,17 @@ class VqVae(LightningModule):
             "loss_recon": self.k_z_given_w_and_decoder(
                 z, zpred_mu, zpred_logstd, per_dim=True
             ),
-            "loss_lm": self.k_w_given_language(w_logits, w, per_dim=True)
-            if self.use_lm
-            else 0.0,
-            "loss_codebook": loss_codebook
-            if self.use_discretizer and self.fit_autoencoder
-            else 0.0,
-            "loss_commit": loss_commit
-            if self.use_discretizer and self.fit_autoencoder
-            else 0.0,
+            "loss_lm": (
+                self.k_w_given_language(w_logits, w, per_dim=True)
+                if self.use_lm
+                else 0.0
+            ),
+            "loss_codebook": (
+                loss_codebook if self.use_discretizer and self.fit_autoencoder else 0.0
+            ),
+            "loss_commit": (
+                loss_commit if self.use_discretizer and self.fit_autoencoder else 0.0
+            ),
         }
         loss = (
             losses["loss_recon"]

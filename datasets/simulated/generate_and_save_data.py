@@ -1,4 +1,4 @@
-from simulated.data_generators import UniformDataGenerator
+from data_generators import UniformDataGenerator
 import os
 import pandas as pd
 import torch

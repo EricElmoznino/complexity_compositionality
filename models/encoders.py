@@ -6,7 +6,12 @@ from torch import nn, FloatTensor
 from models.utils import learned_token_encodings, positional_token_encodings, MLP
 
 
-class VqVaeEncoder(ABC, nn.Module):
+##############################################################
+#################### Embedding decoders ######################
+##############################################################
+
+
+class EmbeddingEncoder(ABC, nn.Module):
     def __init__(self, emb_dim: int, num_words: int) -> None:
         super().__init__()
         self.emb_dim = emb_dim
@@ -24,12 +29,7 @@ class VqVaeEncoder(ABC, nn.Module):
         pass
 
 
-##############################################################
-############# Subclasses for different encoders ##############
-##############################################################
-
-
-class TransformerVqVaeEncoder(VqVaeEncoder):
+class TransformerEmbeddingEncoder(EmbeddingEncoder):
     TokenEncodingType = Literal["learned", "positional"]
 
     def __init__(
@@ -108,7 +108,7 @@ class TransformerVqVaeEncoder(VqVaeEncoder):
         return w_emb
 
 
-class MLPVqVaeEncoder(VqVaeEncoder):
+class MLPEmbeddingEncoder(EmbeddingEncoder):
     def __init__(
         self,
         emb_dim: int,
@@ -137,7 +137,7 @@ class MLPVqVaeEncoder(VqVaeEncoder):
         return w_emb
 
 
-class CNNVqVaeEncoder(VqVaeEncoder):
+class CNNEmbeddingEncoder(EmbeddingEncoder):
     def __init__(
         self,
         emb_dim: int,

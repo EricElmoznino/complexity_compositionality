@@ -14,7 +14,7 @@ framework:
   t_lm: 0 # 20
   vocab_size: 100
   encoder:
-    _target_: models.encoders.TransformerVqVaeEncoder
+    _target_: models.encoders.TransformerEmbeddingEncoder
     emb_dim: 64
     num_words: 8
     repr_dim: 256
@@ -24,7 +24,7 @@ framework:
     dropout: 0.0
     token_encoding_type: "learned"
   decoder:
-    _target_: models.decoders.TransformerVqVaeDecoder
+    _target_: models.decoders.TransformerEmbeddingDecoder
     emb_dim: ${..encoder.emb_dim}
     num_words: ${..encoder.num_words}
     repr_dim: ${..encoder.repr_dim}
@@ -35,7 +35,7 @@ framework:
     token_encoding_type: ${..encoder.token_encoding_type}
     fixed_repr_std: 1.0
   lm:
-    _target_: models.language_models.TransformerVqVaeLM
+    _target_: models.language_models.TransformerEmbeddingLM
     emb_dim: ${..encoder.emb_dim}
     num_words: ${..encoder.num_words}
     num_heads: ${..encoder.num_heads}
