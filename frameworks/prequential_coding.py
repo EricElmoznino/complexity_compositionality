@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 import os
 import torch
-from torch import nn, Tensor
+from torch import nn, Tensor, FloatTensor
+from torch.nn import functional as F
 from lightning import LightningModule
 from datasets.prequential_data import PrequentialDataPipe, PrequentialDataModule
+from models.decoders import SentenceDecoder
 
 
 class PrequentialCoding(LightningModule):
@@ -16,7 +18,7 @@ class PrequentialCoding(LightningModule):
         include_initial_length: bool = True,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["predictor"])
+        self.save_hyperparameters(ignore=["model"])
 
         self.model = model
 
@@ -30,7 +32,7 @@ class PrequentialCoding(LightningModule):
             self.model_cache_dir = os.environ["SLURM_TMPDIR"]
 
     @abstractmethod
-    def forward(self, data: dict[str, Tensor], sum: bool = False):
+    def forward(self, data: dict[str, Tensor], sum: bool = False) -> FloatTensor:
         # Returns the negative log-likelihood of the data given the model,
         # either summed across tensor dimensions or averaged.
         pass
@@ -119,3 +121,52 @@ class PrequentialCoding(LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.lr)
+
+
+##############################################################
+######################## Subclasses ##########################
+##############################################################
+
+
+class PrequentialCodingSentenceDecoder(PrequentialCoding):
+    def __init__(
+        self,
+        *args,
+        discrete_z: bool = False,
+        z_num_attributes: int | None = None,
+        z_num_vals: int | None = None,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.save_hyperparameters(ignore=["model"])
+        self.model: SentenceDecoder  # Just for type annotation
+
+    def forward(self, data: dict[str, Tensor], sum: bool = False) -> FloatTensor:
+        w, z_true = data["w"], data["z"]
+        z_mu, z_logstd = self.model.encode(w)
+        if self.hparams.discrete_z:
+            z_logits = z_mu.view(
+                -1, self.hparams.z_num_attributes, self.hparams.z_num_vals
+            )
+            dist = torch.distributions.Categorical(logits=z_logits)
+        else:
+            dist = torch.distributions.Normal(z_mu, z_logstd.exp())
+        logp = dist.log_prob(z_true)
+        logp = logp.sum() if sum else logp.mean()
+        return -logp
+
+    @property
+    def initial_length(self) -> float:
+        z_initial = self.dataset.data["z"][: self.dataset.data_sizes[0]]
+        if self.hparams.discrete_z:
+            z_marginal = (
+                F.one_hot(z_initial, num_classes=self.hparams.z_num_vals)
+                .float()
+                .mean(dim=0)
+            )
+            z_marginal = torch.distributions.Categorical(probs=z_marginal)
+        else:
+            z_marginal_mu, z_marginal_std = z_initial.mean(dim=0), z_initial.std(dim=0)
+            z_marginal = torch.distributions.Normal(z_marginal_mu, z_marginal_std)
+        logp = z_marginal.log_prob(z_initial)
+        return -logp.sum().item()

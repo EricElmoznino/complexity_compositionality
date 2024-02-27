@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Literal
 import math
 import torch
-from torch import nn, FloatTensor
+from torch import nn, FloatTensor, LongTensor
 from models.utils import learned_token_encodings, positional_token_encodings, MLP
 
 
@@ -186,3 +186,28 @@ class IdentityEmbeddingDecoder(EmbeddingDecoder):
     def forward(self, w_emb: FloatTensor) -> tuple[FloatTensor, FloatTensor]:
         w_emb = w_emb.reshape(w_emb.shape[0], -1)
         return w_emb, torch.zeros_like(w_emb)
+
+
+##############################################################
+##################### Sentence decoders ######################
+##############################################################
+
+
+class SentenceDecoder(nn.Module):
+    def __init__(self, vocab_size: int, embedding_decoder: EmbeddingDecoder) -> None:
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.embedding_decoder = embedding_decoder
+        self.embedding = nn.Embedding(vocab_size, embedding_decoder.emb_dim)
+
+    @abstractmethod
+    def forward(self, w: LongTensor) -> tuple[FloatTensor, FloatTensor]:
+        """
+        Args:
+            w (FloatTensor): (bs, num_words)
+
+        Returns:
+            tuple[FloatTensor, FloatTensor]: mean - (bs, ...), logstd - (bs, ...)
+        """
+        w_emb = self.embedding(w)
+        return self.embedding_decoder(w_emb)
