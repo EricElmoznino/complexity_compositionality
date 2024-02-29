@@ -80,23 +80,24 @@ class PrequentialCoding(LightningModule):
         else:
             self.interval_epochs_since_improvement += 1
 
-        # If no improvement for a while, encode next chunk and increment data size
+        # If no improvement, stop training on this current set of data
         if self.interval_epochs_since_improvement >= self.interval_patience:
             if self.model_cache_dir is not None:
                 self.model.load_state_dict(
                     torch.load(os.path.join(self.model_cache_dir, "best.pt"))
                 )
-            self.dataset.increment_data_size()
-            self.compute_length(mode="encode")
-            self.interval_epochs_since_improvement = 0
-            self.interval_best_loss = torch.inf
-            if not self.dataset.done:
-                self.reset_model_params()
 
-        # Get final loss across the whole dataset
-        if self.dataset.done:
-            self.compute_length(mode="all_train")
-            self.trainer.should_stop = True
+            # Encode the next increment of data
+            if not self.dataset.done:
+                self.dataset.increment_data_size()
+                self.compute_length(mode="encode")
+                self.interval_epochs_since_improvement = 0
+                self.interval_best_loss = torch.inf
+                self.reset_model_params()
+            # Get final loss across the whole dataset
+            else:
+                self.compute_length(mode="all_train")
+                self.trainer.should_stop = True
 
     def compute_length(self, mode: str):
         prev_mode = self.dataset.mode
