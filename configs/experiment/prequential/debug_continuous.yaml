@@ -24,7 +24,7 @@ framework:
 
 data:
   _target_: datasets.debug_data.DebugPrequentialDataModule
-  data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/prequential_debug/discrete_disentanglement:1"
+  data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/prequential_debug/continuous_disentanglement:1"
   min_data_size: 100
   val_size: 2000
   data_increment: 100
@@ -32,10 +32,10 @@ data:
   num_words: 4
   vocab_size: 10
   disentanglement: 1
-  discrete: True
-  z_dim: null
-  num_attributes: ${.num_words}
-  num_vals: ${.vocab_size}
+  discrete: False
+  z_dim: 40
+  num_attributes: null
+  num_vals: null
 
 trainer:
   max_epochs: 100000

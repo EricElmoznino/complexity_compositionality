@@ -39,9 +39,8 @@ class PrequentialCoding(LightningModule):
         # either summed across tensor dimensions or averaged.
         pass
 
-    @property
     @abstractmethod
-    def initial_length(self) -> float:
+    def compute_initial_length(self) -> float:
         # Returns the initial length of the unmodeled first data increment.
         pass
 
@@ -57,8 +56,10 @@ class PrequentialCoding(LightningModule):
 
     def on_train_start(self):
         if self.hparams.include_initial_length:
+            initial_length = self.compute_initial_length()
+            self.interval_errors.append(initial_length)
             self.log("data encoded", self.dataset.data_encoded)
-            self.log("K/K(interval i)", self.initial_length)
+            self.log("K/K(interval i)", initial_length)
 
     def on_validation_epoch_start(self):
         self.dataset.set_mode("val")
@@ -169,8 +170,7 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
         logp = logp.sum() if sum else logp.mean()
         return -logp
 
-    @property
-    def initial_length(self) -> float:
+    def compute_initial_length(self) -> float:
         z_initial = self.dataset.data["z"][: self.dataset.data_sizes[0]]
         if self.hparams.discrete_z:
             z_marginal = (
