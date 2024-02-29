@@ -45,7 +45,6 @@ class TransformerEmbeddingDecoder(EmbeddingDecoder):
         fixed_repr_std: float | None = 1.0,
     ) -> None:
         super().__init__(emb_dim=emb_dim, num_words=num_words)
-        assert repr_dim >= emb_dim, "repr_dim must be >= emb_dim"
         self.repr_dim = repr_dim
         self.num_heads = num_heads
         self.num_layers = num_layers
@@ -127,9 +126,6 @@ class MLPEmbeddingDecoder(EmbeddingDecoder):
         fixed_repr_std: float | None = 1.0,
     ) -> None:
         super().__init__(emb_dim=emb_dim, num_words=num_words)
-        assert (
-            repr_dim >= emb_dim * num_words
-        ), "repr_dim must be >= emb_dim * num_words"
         self.fixed_repr_std = fixed_repr_std
         num_outputs = repr_dim * 2 if fixed_repr_std is None else repr_dim
         self.mlp = MLP(

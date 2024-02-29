@@ -44,7 +44,6 @@ class TransformerEmbeddingEncoder(EmbeddingEncoder):
         token_encoding_type: TokenEncodingType = "learned",
     ) -> None:
         super().__init__(emb_dim=emb_dim, num_words=num_words)
-        assert repr_dim >= emb_dim, "repr_dim must be >= emb_dim"
         self.repr_dim = repr_dim
         self.num_heads = num_heads
         self.num_layers = num_layers
@@ -119,9 +118,6 @@ class MLPEmbeddingEncoder(EmbeddingEncoder):
         dropout: float = 0.0,
     ) -> None:
         super().__init__(emb_dim=emb_dim, num_words=num_words)
-        assert (
-            repr_dim >= emb_dim * num_words
-        ), "repr_dim must be >= emb_dim * num_words"
         self.mlp = MLP(
             num_inputs=repr_dim,
             num_outputs=emb_dim * num_words,

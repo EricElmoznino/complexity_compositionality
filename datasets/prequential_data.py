@@ -76,12 +76,13 @@ class PrequentialDataPipe(MapDataPipe):
         self.data_sizes = np.arange(min_data_size, self.train_size + 1, data_increment)
         self._data_size_idx = 0
         self.mode = "train"
+        assert (
+            len(self.data_sizes) > 1
+        ), "Data size too small; must be incremented at least once"
 
     def set_mode(self, mode: Mode):
         assert mode in get_args(PrequentialDataPipe.Mode)
-        if mode == "train" or mode == "val":
-            assert not self.done
-        elif mode == "encode":
+        if mode == "encode":
             assert self._data_size_idx > 0
         elif mode == "all_train":
             assert self.done

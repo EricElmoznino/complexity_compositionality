@@ -14,11 +14,11 @@ warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 class DebugPrequentialDataModule(PrequentialDataModule):
     def __init__(
         self,
-        sentence_length: int,
+        num_words: int,
         vocab_size: int,
-        z_dim: int,
         disentanglement: int,
         discrete: bool,
+        z_dim: int | None,
         num_attributes: int | None,
         num_vals: int | None,
         **kwargs,
@@ -26,24 +26,30 @@ class DebugPrequentialDataModule(PrequentialDataModule):
         super().__init__(**kwargs)
         self.save_hyperparameters()
 
-        if (
-            not os.path.exists(os.path.join(self.hparams.data_dir, "w.pt"))
-            or not os.path.exists(os.path.join(self.hparams.data_dir, "z.pt")),
-        ):
+        if not os.path.exists(self.hparams.data_dir):
+            os.mkdir(self.hparams.data_dir)
             self.generate_data()
 
     def generate_data(self):
-        num_positions = self.hparams.sentence_length // self.hparams.disentanglement
+        num_positions = self.hparams.num_words // self.hparams.disentanglement
         num_entries = self.hparams.vocab_size**self.hparams.disentanglement
-        dim = self.hparams.z_dim // num_positions
-        lookup_table = torch.randn(num_positions, num_entries, dim)
 
-        w = torch.combinations(
-            torch.LongTensor(range(self.hparams.vocab_size)),
-            r=self.hparams.sentence_length,
-            with_replacement=True,
+        if self.hparams.discrete:
+            dim = self.hparams.num_attributes // num_positions
+            lookup_table = torch.randint(
+                0, self.hparams.num_vals, (num_positions, num_entries, dim)
+            )
+        else:
+            dim = self.hparams.z_dim // num_positions
+            lookup_table = torch.randn(num_positions, num_entries, dim)
+
+        w = torch.cartesian_prod(
+            *[
+                torch.LongTensor(range(self.hparams.vocab_size))
+                for _ in range(self.hparams.num_words)
+            ]
         )
-        w = w[torch.randperm(w.size(0))]
+        w = w[torch.randperm(w.shape[0])]
 
         z = []
         for wi in w:

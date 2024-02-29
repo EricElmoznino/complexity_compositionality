@@ -13,6 +13,7 @@ class PrequentialCoding(LightningModule):
         self,
         model: nn.Module,
         interval_patience: int = 15,
+        interval_patience_tol: float = 0.0,
         lr: float = 1e-3,
         model_cache_dir: str | None = None,
         include_initial_length: bool = True,
@@ -23,6 +24,7 @@ class PrequentialCoding(LightningModule):
         self.model = model
 
         self.interval_patience = interval_patience
+        self.interval_patience_tol = interval_patience_tol
         self.interval_epochs_since_improvement = 0
         self.interval_best_loss = torch.inf
         self.interval_errors = []
@@ -65,8 +67,9 @@ class PrequentialCoding(LightningModule):
         self.dataset.set_mode("train")
 
     def on_train_epoch_end(self):
+        # Check for improvement on validation set
         val_loss = self.trainer.callback_metrics["loss/val"]
-        if val_loss < self.interval_best_loss:
+        if val_loss < self.interval_best_loss - self.interval_patience_tol:
             self.interval_best_loss = val_loss
             self.interval_epochs_since_improvement = 0
             if self.model_cache_dir is not None:
@@ -77,6 +80,7 @@ class PrequentialCoding(LightningModule):
         else:
             self.interval_epochs_since_improvement += 1
 
+        # If no improvement for a while, encode next chunk and increment data size
         if self.interval_epochs_since_improvement >= self.interval_patience:
             if self.model_cache_dir is not None:
                 self.model.load_state_dict(
@@ -87,8 +91,9 @@ class PrequentialCoding(LightningModule):
             self.interval_epochs_since_improvement = 0
             self.interval_best_loss = torch.inf
             if not self.dataset.done:
-                self.model.reset_params()
+                self.reset_model_params()
 
+        # Get final loss across the whole dataset
         if self.dataset.done:
             self.compute_length(mode="all_train")
             self.trainer.should_stop = True
@@ -100,6 +105,7 @@ class PrequentialCoding(LightningModule):
 
         neg_logp = 0
         for data in dataloader:
+            data = {k: v.to(self.device) for k, v in data.items()}
             neg_logp += self.forward(data, sum=True).detach().cpu().item()
 
         if mode == "encode":
@@ -113,6 +119,13 @@ class PrequentialCoding(LightningModule):
             self.log("K/K(f)", k_data - neg_logp)
 
         self.dataset.set_mode(prev_mode)
+
+    def reset_model_params(self):
+        def reset_module(module):
+            if hasattr(module, "reset_parameters"):
+                module.reset_parameters()
+
+        self.model.apply(reset_module)
 
     @property
     def dataset(self) -> PrequentialDataPipe:
@@ -143,7 +156,7 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
 
     def forward(self, data: dict[str, Tensor], sum: bool = False) -> FloatTensor:
         w, z_true = data["w"], data["z"]
-        z_mu, z_logstd = self.model.encode(w)
+        z_mu, z_logstd = self.model(w)
         if self.hparams.discrete_z:
             z_logits = z_mu.view(
                 -1, self.hparams.z_num_attributes, self.hparams.z_num_vals
