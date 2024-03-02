@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from lightning import LightningModule
 from datasets.prequential_data import PrequentialDataPipe, PrequentialDataModule
 from models.decoders import SentenceDecoder
+from utils import skellam
 
 
 class PrequentialCoding(LightningModule):
@@ -34,9 +35,9 @@ class PrequentialCoding(LightningModule):
             self.model_cache_dir = os.environ["SLURM_TMPDIR"]
 
     @abstractmethod
-    def forward(self, data: dict[str, Tensor], sum: bool = False) -> FloatTensor:
+    def forward(self, data: dict[str, Tensor], encode: bool = False) -> FloatTensor:
         # Returns the negative log-likelihood of the data given the model,
-        # either summed across tensor dimensions or averaged.
+        # either for the loss or for encoding.
         pass
 
     @abstractmethod
@@ -108,7 +109,7 @@ class PrequentialCoding(LightningModule):
         neg_logp = 0
         for data in dataloader:
             data = {k: v.to(self.device) for k, v in data.items()}
-            neg_logp += self.forward(data, sum=True).detach().cpu().item()
+            neg_logp += self.forward(data, encode=True).detach().cpu().item()
 
         if mode == "encode":
             self.interval_errors.append(neg_logp)
@@ -156,7 +157,7 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
         self.save_hyperparameters(ignore=["model"])
         self.model: SentenceDecoder  # Just for type annotation
 
-    def forward(self, data: dict[str, Tensor], sum: bool = False) -> FloatTensor:
+    def forward(self, data: dict[str, Tensor], encode: bool = False) -> FloatTensor:
         w, z_true = data["w"], data["z"]
         z_mu, z_logstd = self.model(w)
         if self.hparams.discrete_z:
@@ -164,10 +165,10 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
                 -1, self.hparams.z_num_attributes, self.hparams.z_num_vals
             )
             dist = torch.distributions.Categorical(logits=z_logits)
+            logp = dist.log_prob(z_true)
         else:
-            dist = torch.distributions.Normal(z_mu, z_logstd.exp())
-        logp = dist.log_prob(z_true)
-        logp = logp.sum() if sum else logp.mean()
+            logp = skellam.approx_gaussian_logpmf(z_true, z_mu, z_logstd.exp())
+        logp = logp.sum() if encode else logp.mean()
         return -logp
 
     def compute_initial_length(self) -> float:
@@ -179,8 +180,10 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
                 .mean(dim=0)
             )
             z_marginal = torch.distributions.Categorical(probs=z_marginal)
+            logp = z_marginal.log_prob(z_initial)
         else:
             z_marginal_mu, z_marginal_std = z_initial.mean(dim=0), z_initial.std(dim=0)
-            z_marginal = torch.distributions.Normal(z_marginal_mu, z_marginal_std)
-        logp = z_marginal.log_prob(z_initial)
+            logp = skellam.approx_gaussian_logpmf(
+                z_initial, z_marginal_mu, z_marginal_std
+            )
         return -logp.sum().item()
