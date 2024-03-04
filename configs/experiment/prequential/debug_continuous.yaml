@@ -19,7 +19,7 @@ framework:
       repr_dim: 40
       num_layers: 4
       hidden_dim: 256
-      fixed_repr_std: 1.0
+      fixed_repr_std: 0.35
       dropout: 0.0
 
 data:

@@ -1,3 +1,4 @@
+import torch
 from scipy.stats import skellam
 from torch import FloatTensor
 
@@ -7,7 +8,7 @@ def approx_gaussian_logpmf(
     mean: FloatTensor,
     std: FloatTensor,
     precision: float = 1e-2,
-) -> float:
+) -> FloatTensor:
     x, mean, std = (
         x.detach().cpu().numpy(),
         mean.detach().cpu().numpy(),
@@ -19,5 +20,5 @@ def approx_gaussian_logpmf(
     mu1 = (mean + var) / 2
     mu2 = mu1 - mean
     logpmf = skellam.logpmf(x, mu1, mu2)
-    logpmf = logpmf.sum()
+    logpmf = torch.from_numpy(logpmf)
     return logpmf

@@ -43,6 +43,7 @@ class TransformerEmbeddingDecoder(EmbeddingDecoder):
         dropout: float = 0.0,
         token_encoding_type: TokenEncodingType = "learned",
         fixed_repr_std: float | None = 1.0,
+        min_std: float | None = 1e-2,
     ) -> None:
         super().__init__(emb_dim=emb_dim, num_words=num_words)
         self.repr_dim = repr_dim
@@ -52,6 +53,7 @@ class TransformerEmbeddingDecoder(EmbeddingDecoder):
         self.dropout = dropout
         self.token_encoding_type = token_encoding_type
         self.fixed_repr_std = fixed_repr_std
+        self.min_std = min_std
 
         # Positional encodings
         if self.token_encoding_type == "learned":
@@ -101,6 +103,8 @@ class TransformerEmbeddingDecoder(EmbeddingDecoder):
         z_mu = self.transformer(input)[:, : self.num_repr_tokens, :]
         if self.fixed_repr_std is None:
             z_mu, z_logstd = z_mu.chunk(2, dim=1)
+            if self.min_std is not None:
+                z_logstd = z_logstd.clamp(min=math.log(self.min_std))
         else:
             z_logstd = math.log(self.fixed_repr_std) * torch.ones_like(z_mu)
 
@@ -124,9 +128,11 @@ class MLPEmbeddingDecoder(EmbeddingDecoder):
         hidden_dim: int = 256,
         dropout: float = 0.0,
         fixed_repr_std: float | None = 1.0,
+        min_std: float | None = 1e-2,
     ) -> None:
         super().__init__(emb_dim=emb_dim, num_words=num_words)
         self.fixed_repr_std = fixed_repr_std
+        self.min_std = min_std
         num_outputs = repr_dim * 2 if fixed_repr_std is None else repr_dim
         self.mlp = MLP(
             num_inputs=num_words * emb_dim,
@@ -141,6 +147,8 @@ class MLPEmbeddingDecoder(EmbeddingDecoder):
         z_mu = self.mlp(w_emb)
         if self.fixed_repr_std is None:
             z_mu, z_logstd = z_mu.chunk(2, dim=1)
+            if self.min_std is not None:
+                z_logstd = z_logstd.clamp(min=math.log(self.min_std))
         else:
             z_logstd = math.log(self.fixed_repr_std) * torch.ones_like(z_mu)
         return z_mu, z_logstd

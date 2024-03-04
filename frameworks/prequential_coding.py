@@ -9,7 +9,7 @@ from models.decoders import SentenceDecoder
 from utils import skellam
 
 
-class PrequentialCoding(LightningModule):
+class PrequentialCoding(ABC, LightningModule):
     def __init__(
         self,
         model: nn.Module,
@@ -167,7 +167,10 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
             dist = torch.distributions.Categorical(logits=z_logits)
             logp = dist.log_prob(z_true)
         else:
-            logp = skellam.approx_gaussian_logpmf(z_true, z_mu, z_logstd.exp())
+            if encode:
+                logp = skellam.approx_gaussian_logpmf(z_true, z_mu, z_logstd.exp())
+            else:
+                logp = torch.distributions.Normal(z_mu, z_logstd.exp()).log_prob(z_true)
         logp = logp.sum() if encode else logp.mean()
         return -logp
 
