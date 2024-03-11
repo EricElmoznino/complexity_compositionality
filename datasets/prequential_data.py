@@ -74,7 +74,7 @@ class PrequentialDataPipe(MapDataPipe):
         }
         self.train_size = self.data[list(self.data.keys())[0]].shape[0] - val_size
         self.data_sizes = np.arange(min_data_size, self.train_size + 1, data_increment)
-        self._data_size_idx = 0
+        self.data_size_idx = 0
         self.mode = "train"
         assert (
             len(self.data_sizes) > 1
@@ -83,35 +83,35 @@ class PrequentialDataPipe(MapDataPipe):
     def set_mode(self, mode: Mode):
         assert mode in get_args(PrequentialDataPipe.Mode)
         if mode == "encode":
-            assert self._data_size_idx > 0
+            assert self.data_size_idx > 0
         elif mode == "all_train":
             assert self.done
         self.mode = mode
 
     @property
     def done(self) -> bool:
-        return self._data_size_idx >= len(self.data_sizes) - 1
+        return self.data_size_idx >= len(self.data_sizes) - 1
 
     @property
     def data_encoded(self) -> float:
-        return float(self.data_sizes[self._data_size_idx])
+        return float(self.data_sizes[self.data_size_idx])
 
     def increment_data_size(self):
         assert not self.done
-        self._data_size_idx += 1
+        self.data_size_idx += 1
 
     def __len__(self) -> int:
         # Only data currently being trained on
         if self.mode == "train":
-            return self.data_sizes[self._data_size_idx]
+            return self.data_sizes[self.data_size_idx]
         # All data not currently trained on, used to decide when to move to the next data interval
         elif self.mode == "val":
             return self.val_size
         # Only next data interval, used for prequential code length
         elif self.mode == "encode":
             return (
-                self.data_sizes[self._data_size_idx]
-                - self.data_sizes[self._data_size_idx - 1]
+                self.data_sizes[self.data_size_idx]
+                - self.data_sizes[self.data_size_idx - 1]
             )
         elif self.mode == "all_train":
             return self.train_size
@@ -122,5 +122,5 @@ class PrequentialDataPipe(MapDataPipe):
         if self.mode == "val":
             index += self.train_size
         elif self.mode == "encode":
-            index += self.data_sizes[self._data_size_idx - 1]
+            index += self.data_sizes[self.data_size_idx - 1]
         return {k: v[index] for k, v in self.data.items()}

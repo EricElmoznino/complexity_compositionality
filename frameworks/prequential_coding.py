@@ -41,8 +41,8 @@ class PrequentialCoding(ABC, LightningModule):
         pass
 
     @abstractmethod
-    def compute_initial_length(self) -> float:
-        # Returns the initial length of the unmodeled first data increment.
+    def compute_naive_length(self) -> float:
+        # Returns the length of data using naive statistics.
         pass
 
     def training_step(self, data, batch_idx):
@@ -57,7 +57,7 @@ class PrequentialCoding(ABC, LightningModule):
 
     def on_train_start(self):
         if self.hparams.include_initial_length:
-            initial_length = self.compute_initial_length()
+            initial_length = self.compute_naive_length()
             self.interval_errors.append(initial_length)
             self.log("data encoded", self.dataset.data_encoded)
             self.log("K/K(interval i)", initial_length)
@@ -112,6 +112,7 @@ class PrequentialCoding(ABC, LightningModule):
             neg_logp += self.forward(data, encode=True).detach().cpu().item()
 
         if mode == "encode":
+            neg_logp = min(neg_logp, self.compute_naive_length())
             self.interval_errors.append(neg_logp)
             self.log("data encoded", self.dataset.data_encoded)
             self.log("K/K(interval i)", neg_logp)
@@ -174,19 +175,22 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
         logp = logp.sum() if encode else logp.mean()
         return -logp
 
-    def compute_initial_length(self) -> float:
-        z_initial = self.dataset.data["z"][: self.dataset.data_sizes[0]]
+    def compute_naive_length(self) -> float:
+        if self.dataset.data_size_idx == 0:
+            z = self.dataset.data["z"][: self.dataset.data_sizes[0]]
+        else:
+            z = self.dataset.data["z"][
+                self.dataset.data_sizes[
+                    self.dataset.data_size_idx - 1
+                ] : self.dataset.data_sizes[self.dataset.data_size_idx]
+            ]
         if self.hparams.discrete_z:
             z_marginal = (
-                F.one_hot(z_initial, num_classes=self.hparams.z_num_vals)
-                .float()
-                .mean(dim=0)
+                F.one_hot(z, num_classes=self.hparams.z_num_vals).float().mean(dim=0)
             )
             z_marginal = torch.distributions.Categorical(probs=z_marginal)
-            logp = z_marginal.log_prob(z_initial)
+            logp = z_marginal.log_prob(z)
         else:
-            z_marginal_mu, z_marginal_std = z_initial.mean(dim=0), z_initial.std(dim=0)
-            logp = skellam.approx_gaussian_logpmf(
-                z_initial, z_marginal_mu, z_marginal_std
-            )
+            z_marginal_mu, z_marginal_std = z.mean(dim=0), z.std(dim=0)
+            logp = skellam.approx_gaussian_logpmf(z, z_marginal_mu, z_marginal_std)
         return -logp.sum().item()
