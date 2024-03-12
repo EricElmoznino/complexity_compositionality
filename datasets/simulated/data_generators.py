@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import Literal, Any
 import numpy as np
 from utils import skellam
 
@@ -175,9 +175,9 @@ class LookupTableDataGenerator(SimulatedDataGenerator):
 
     def __init__(
         self,
+        z_dim: int,
         num_words: int,
         vocab_size: int,
-        z_dim: int,
         disentanglement: int,
         precision: float = 0.01,
         noise_ratio: float = 0.1,
@@ -185,9 +185,10 @@ class LookupTableDataGenerator(SimulatedDataGenerator):
         random_seed: int = 0,
     ) -> None:
         super().__init__()
+
+        self.z_dim = z_dim
         self.num_words = num_words
         self.vocab_size = vocab_size
-        self.z_dim = z_dim
         self.disentanglement = disentanglement
         self.precision = precision
         self.noise_ratio = noise_ratio
@@ -275,69 +276,138 @@ class LookupTableDataGenerator(SimulatedDataGenerator):
         return logp
 
 
-# class LookupTableHierarchicalNonLinearDataGenerator(LookupTableDataGenerator):
-#     def __init__(
-#         self,
-#         k: int,
-#         d: int,
-#         vocab_size: int,
-#         nonlinearity=np.sin,
-#         granularity: float = 0.01,
-#         noise_scale: float = 0.001,
-#         random_seed: int = 0,
-#     ):
-#         """Generates data in the following way
-#         - Generate a lookup table of size (vocab_size, int(k)) such that we have a representation of dimension int(k) for each word
-#         - Generate a sentence W by:
-#             - sampling k words uniformly at random from the vocabulary.
-#             - taking the corresponding representations from the lookup table and adding them
-#             - adding noise sampled from a uniform distribution on [-noise_level, noise_level]
+class SyntacticDataGenerator(SimulatedDataGenerator):
+    CompositionType = Literal["linear"]
 
-#         Args:
-#             k (int): Number of words in a sentence.
-#             d (int): Dimensionality of the final representation -> same as dimensionality of k in this case
-#             vocab_size (int): Size of the vocabulary.
-#             granularity (float): Granularity of the lookup table.
-#             random_seed (int): Random seed for reproducibility
-#         """
-#         super().__init__(k, d, vocab_size, granularity, noise_scale, random_seed)
-#         self.nonlinearity = nonlinearity
+    def __init__(
+        self,
+        z_dim: int,
+        num_words: int,
+        vocab_size: int,
+        num_terminal_pos: int,
+        grammar: dict[tuple[int, int], int],
+        precision: float = 0.01,
+        noise_ratio: float = 0.1,
+        composition: CompositionType = "linear",
+        random_seed: int = 0,
+    ) -> None:
+        super().__init__()
 
-#     @property
-#     def k_decoder(self) -> float:
-#         # Have to specify the bits for all the numbers in the lookup table,
-#         # And then the complexity of the decoding function is the number of layers in the hierarchy (log2(k))
-#         # multiplied by the number of operations at each layer (~2 in this case)
+        assert np.log2(num_words) % 1 == 0
+        assert all(
+            [
+                (i, j) in grammar
+                for i in range(num_terminal_pos)
+                for j in range(num_terminal_pos)
+            ]
+        )
+        assert all([k >= num_terminal_pos for k in grammar.values()])
 
-#         return (
-#             self.lookup_table.size * np.log(2 * self.max_int + 1) + np.log2(self.k) * 2
-#         )
+        self.z_dim = z_dim
+        self.num_words = num_words
+        self.vocab_size = vocab_size
+        self.num_terminal_pos = num_terminal_pos
+        self.precision = precision
+        self.noise_ratio = noise_ratio
+        self.composition = composition
+        self.random_state = np.random.RandomState(random_seed)
 
-#     def get_word_dim(self) -> int:
-#         return self.d
+        self.word_embeddings = skellam.approx_gaussian_sample(
+            mean=0.0,
+            std=1.0,
+            shape=(vocab_size, z_dim),
+            precision=precision,
+            random_state=self.random_state,
+        ).astype(np.float32)
+        self.word_pos = {i: i // num_terminal_pos for i in range(vocab_size)}
+        self.grammar = grammar
+        self.rules = {ij: self.sample_rule() for ij in self.grammar}
 
-#     def one_layer_hierarchy(self, curr_rep: np.ndarray) -> np.ndarray:
-#         batch_size, n_words, word_dim = curr_rep.shape
-#         curr_rep = curr_rep.reshape(batch_size, 2, int(n_words / 2), word_dim)
-#         curr_rep = self.nonlinearity(curr_rep.sum(axis=1))
-#         return curr_rep
+    def sample_rule(self) -> Any:
+        if self.composition == "linear":
+            w = skellam.approx_gaussian_sample(
+                mean=0.0,
+                std=1.0,
+                shape=(2 * self.z_dim, self.z_dim),
+                precision=self.precision,
+                random_state=self.random_state,
+            ).astype(np.float32)
+            return w
+        else:
+            raise ValueError("Composition type not recognized")
 
-#     def decode_w_perfectly(self, w: np.ndarray) -> np.ndarray:
-#         """Computes and returns the perfect (noiseless) decoding of z given w
-#         Args:
-#             w (np.ndarray): (n, k) integer matrix of sentences W.
+    def apply_rule(self, x: np.ndarray, y: np.ndarray, rule_params: Any):
+        if self.composition == "linear":
+            return np.concatenate([x, y]) @ rule_params
+        else:
+            raise ValueError("Composition type not recognized")
 
-#         Returns:
-#             np.ndarray: (n, d) float matrix of representations z.
-#         """
-#         reps = [self.lookup_table[w[:, i]] for i in range(self.k)]
-#         reps = np.array(reps).transpose(1, 0, 2)
-#         while reps.shape[1] > 1:
-#             reps = self.one_layer_hierarchy(reps)
-#         return reps.squeeze()
+    def decode_w(self, w: np.ndarray) -> np.ndarray:
+        z = []
+        for wi in w:
+            pos = [self.word_pos[word] for word in wi]
+            zi = [self.word_embeddings[word] for word in wi]
+            while len(zi) > 1:
+                pos_next, z_next = [], []
+                for i in range(0, len(zi), 2):
+                    rule_params = self.rules[(pos[i], pos[i + 1])]
+                    out_pos = self.grammar[(pos[i], pos[i + 1])]
+                    out_z = self.apply_rule(zi[i], zi[i + 1], rule_params)
+                    pos_next.append(out_pos), z_next.append(out_z)
+                pos, zi = pos_next, z_next
+            z.append(zi[0])
+        return np.stack(z)
 
+    @property
+    def k_language(self) -> float:
+        # Have to specify the bits for two integer numbers that define the uniform distribution, and the rest of p(w) has (small) constant complexity.
+        return np.log(self.vocab_size) + np.log(self.num_words)
 
-# data_gen = LookupTableHierarchicalNonLinearDataGenerator(k=32, d=256, vocab_size=10)
-# w, z = data_gen.sample(10)
-# print(data_gen.k_z(z, w, per_sample=True))
-# print(data_gen.compositionality(z, w))
+    @property
+    def k_decoder(self) -> float:
+        logp_emb = skellam.approx_gaussian_logpmf(
+            x=self.word_embeddings, mean=0.0, std=1.0, precision=self.precision
+        ).sum()
+        if self.composition == "linear":
+            logp_rules = sum(
+                [
+                    skellam.approx_gaussian_logpmf(
+                        x=r, mean=0.0, std=1.0, precision=self.precision
+                    ).sum()
+                    for r in self.rules.values()
+                ]
+            )
+        else:
+            raise ValueError("Composition type not recognized")
+        return -(logp_emb + logp_rules)
+
+    def sample_w(self, n: int) -> np.ndarray:
+        return np.random.randint(0, self.vocab_size, size=(n, self.num_words))
+
+    def sample_z_given_w(self, w: np.ndarray) -> np.ndarray:
+        z = self.decode_w(w)
+        if self.noise_ratio > 0:
+            noise = skellam.approx_gaussian_sample(
+                mean=0.0,
+                std=self.noise_ratio,
+                shape=z.shape,
+                precision=self.precision,
+                random_state=self.random_state,
+            ).astype(np.float32)
+            z += noise
+        return z
+
+    def logp_w(self, w: np.ndarray) -> np.ndarray:
+        return (
+            np.ones(w.shape[0], dtype=np.float32)
+            * np.log(1 / self.vocab_size)
+            * self.num_words
+        )
+
+    def logp_z_given_w_and_decoder(self, z: np.ndarray, w: np.ndarray) -> np.ndarray:
+        z_mean = self.decode_w(w)
+        noise = z - z_mean
+        logp = skellam.approx_gaussian_logpmf(
+            x=noise, mean=0.0, std=self.noise_ratio, precision=self.precision
+        ).sum(axis=1)
+        return logp
