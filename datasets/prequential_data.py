@@ -91,16 +91,17 @@ class PrequentialDataPipe(MapDataPipe):
     def scramble_data(self, by: str):
         data = self.data[by]
         assert data.dtype == torch.int64
-        unique_vals = {}
+        idx_scrambled = {}
         for i, val in enumerate(data):
-            if val not in unique_vals:
-                unique_vals[val] = []
-            unique_vals[val].append(i)
-        unique_vals = list(unique_vals.values())
-        unique_vals = np.random.shuffle(unique_vals)  # Scrambled the variables
-        for vals in unique_vals:  # Scramble within the same variable
+            val = tuple(val.tolist())
+            if val not in idx_scrambled:
+                idx_scrambled[val] = []
+            idx_scrambled[val].append(i)
+        idx_scrambled = list(idx_scrambled.values())
+        np.random.shuffle(idx_scrambled)  # Scrambled the variables
+        for vals in idx_scrambled:  # Scramble within the same variable
             np.random.shuffle(vals)
-        idx_scrambled = [val for vals in unique_vals for val in vals]
+        idx_scrambled = [val for vals in idx_scrambled for val in vals]
         return lambda idx: idx_scrambled[idx]
 
     def set_mode(self, mode: Mode):
