@@ -319,7 +319,7 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
             precision=precision,
             random_state=self.random_state,
         ).astype(np.float32)
-        self.word_pos = {i: i // num_terminal_pos for i in range(vocab_size)}
+        self.word_pos = {i: i % num_terminal_pos for i in range(vocab_size)}
         self.grammar = grammar
         self.rules = {ij: self.sample_rule() for ij in self.grammar}
 

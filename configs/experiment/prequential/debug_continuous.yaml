@@ -16,7 +16,7 @@ framework:
       _target_: models.decoders.MLPEmbeddingDecoder
       emb_dim: 64
       num_words: ${....data.num_words}
-      repr_dim: 40
+      repr_dim: ${repr_dim:'${....data.num_words} * ${....data.vocab_size}'}
       num_layers: 4
       hidden_dim: 256
       fixed_repr_std: 0.35
