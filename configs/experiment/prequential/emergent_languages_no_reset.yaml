@@ -24,7 +24,7 @@ framework:
 
 data:
   _target_: datasets.debug_data.DebugPrequentialDataModule
-  data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/results/to_prequential_code/no_reset_topo=0.191_acc=89"
+  data_dir: "/network/scratch/t/thomas.jiralerspong/kolmogorov/results/to_prequential_code/no_reset_topo=0.191_acc=89"
   min_data_size: 100
   val_size: 2000
   data_increment: 100
