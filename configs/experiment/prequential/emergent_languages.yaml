@@ -29,6 +29,7 @@ data:
   val_size: 2000
   data_increment: 100
   batch_size: 100
+  scramble_data_by: "z"
 
 trainer:
   max_epochs: 100000

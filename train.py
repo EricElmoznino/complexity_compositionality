@@ -11,8 +11,8 @@ import wandb
 @hydra.main(config_path="./configs/", config_name="train", version_base=None)
 def train(cfg):
     seed_everything(cfg.seed)
-    framework = hydra.utils.instantiate(cfg.experiment.framework)
     datamodule = hydra.utils.instantiate(cfg.experiment.data)
+    framework = hydra.utils.instantiate(cfg.experiment.framework)
     logger = hydra.utils.instantiate(cfg.logger) if cfg.logger else False
     callbacks = (
         hydra.utils.instantiate(cfg.experiment.callbacks)

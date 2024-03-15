@@ -21,6 +21,7 @@ class PrequentialDataModule(LightningDataModule):
         data_increment: int,
         batch_size: int,
         num_workers: int = 0,
+        scramble_data_by: str | None = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -31,6 +32,7 @@ class PrequentialDataModule(LightningDataModule):
             min_data_size=self.hparams.min_data_size,
             val_size=self.hparams.val_size,
             data_increment=self.hparams.data_increment,
+            scramble_data_by=self.hparams.scramble_data_by,
         )
 
     def train_dataloader(self):
@@ -59,6 +61,7 @@ class PrequentialDataPipe(MapDataPipe):
         min_data_size: int,
         val_size: int,
         data_increment: int,
+        scramble_data_by: str | None = None,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -79,6 +82,26 @@ class PrequentialDataPipe(MapDataPipe):
         assert (
             len(self.data_sizes) > 1
         ), "Data size too small; must be incremented at least once"
+
+        if scramble_data_by is None:
+            self._idx_map = lambda idx: idx
+        else:
+            self._idx_map = self.scramble_data(by=scramble_data_by)
+
+    def scramble_data(self, by: str):
+        data = self.data[by]
+        assert data.dtype == torch.int64
+        unique_vals = {}
+        for i, val in enumerate(data):
+            if val not in unique_vals:
+                unique_vals[val] = []
+            unique_vals[val].append(i)
+        unique_vals = list(unique_vals.values())
+        unique_vals = np.random.shuffle(unique_vals)  # Scrambled the variables
+        for vals in unique_vals:  # Scramble within the same variable
+            np.random.shuffle(vals)
+        idx_scrambled = [val for vals in unique_vals for val in vals]
+        return lambda idx: idx_scrambled[idx]
 
     def set_mode(self, mode: Mode):
         assert mode in get_args(PrequentialDataPipe.Mode)
@@ -123,4 +146,5 @@ class PrequentialDataPipe(MapDataPipe):
             index += self.train_size
         elif self.mode == "encode":
             index += self.data_sizes[self.data_size_idx - 1]
+        index = self._idx_map(index)
         return {k: v[index] for k, v in self.data.items()}
