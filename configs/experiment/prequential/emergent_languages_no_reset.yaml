@@ -1,0 +1,43 @@
+name: "Prequential Coding - Emergent Languages"
+
+framework:
+  _target_: frameworks.prequential_coding.PrequentialCodingSentenceDecoder
+  lr: 0.001
+  discrete_z: ${..data.discrete}
+  z_num_attributes: ${..data.num_attributes}
+  z_num_vals: ${..data.num_vals}
+  interval_patience: 50 # 15
+  interval_patience_tol: 0.001
+  include_initial_length: True
+  model:
+    _target_: models.decoders.SentenceDecoder
+    vocab_size: ${...data.vocab_size}
+    embedding_decoder:
+      _target_: models.decoders.MLPEmbeddingDecoder
+      emb_dim: 64
+      num_words: ${....data.num_words}
+      repr_dim: 40
+      num_layers: 4
+      hidden_dim: 256
+      fixed_repr_std: 1.0
+      dropout: 0.0
+
+data:
+  _target_: datasets.debug_data.DebugPrequentialDataModule
+  data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/results/to_prequential_code/no_reset_topo=0.191_acc=89"
+  min_data_size: 100
+  val_size: 2000
+  data_increment: 100
+  batch_size: 100
+  num_words: 4
+  vocab_size: 10
+  disentanglement: 1
+  discrete: True
+  z_dim: null
+  num_attributes: ${.num_words}
+  num_vals: ${.vocab_size}
+
+trainer:
+  max_epochs: 100000
+
+callbacks: False

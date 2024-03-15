@@ -159,7 +159,7 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
         self.model: SentenceDecoder  # Just for type annotation
 
     def forward(self, data: dict[str, Tensor], encode: bool = False) -> FloatTensor:
-        w, z_true = data["w"], data["z"]
+        w, z_true = data["w"], data["z"] # z true is one hot encoded when it should not be, indices and int
         z_mu, z_logstd = self.model(w)
         if self.hparams.discrete_z:
             z_logits = z_mu.view(

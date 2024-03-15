@@ -67,7 +67,7 @@ class PrequentialDataPipe(MapDataPipe):
         self.data_increment = data_increment
         self.data = {
             f.replace(".pt", ""): torch.load(
-                os.path.join(data_dir, f), map_location="cpu", mmap=True
+                os.path.join(data_dir, f), map_location="cpu", mmap=False
             )
             for f in os.listdir(data_dir)
             if f.endswith(".pt")
