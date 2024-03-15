@@ -16,7 +16,7 @@ framework:
       _target_: models.decoders.MLPEmbeddingDecoder
       emb_dim: 64
       num_words: 4
-      repr_dim: ${repr_dim:'${...z_num_attributes} * ${...z_num_vals}'}
+      repr_dim: ${ast_eval:'${...z_num_attributes} * ${...z_num_vals}'}
       num_layers: 4
       hidden_dim: 256
       fixed_repr_std: 1.0
