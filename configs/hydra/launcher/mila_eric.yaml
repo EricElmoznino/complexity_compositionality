@@ -11,4 +11,4 @@ array_parallelism: 20
 
 setup:
   - "module --quiet load miniconda/3"
-  - "conda activate implicit-explicit"
+  - "conda activate pytorch"
