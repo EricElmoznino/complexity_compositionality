@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Literal, Any
 import numpy as np
+from lark import Lark, Tree
 from utils import skellam
 
 
@@ -284,33 +285,49 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
         z_dim: int,
         num_words: int,
         vocab_size: int,
-        num_terminal_pos: int,
-        grammar: dict[tuple[int, int], int],
+        vocab_terms: dict[int, str],
+        grammar: dict[tuple[str, str], str],
+        roots: list[str],
         precision: float = 0.01,
         noise_ratio: float = 0.1,
         composition: CompositionType = "linear",
         random_seed: int = 0,
     ) -> None:
+        # Note: we are generating sentences uniformly at random, so the grammar must
+        # permit all possible sentences. If this does not happen, the parser will
+        # raise an error when trying to produce Z.
         super().__init__()
 
-        assert np.log2(num_words) % 1 == 0
-        assert all(
-            [
-                (i, j) in grammar
-                for i in range(num_terminal_pos)
-                for j in range(num_terminal_pos)
-            ]
-        )
-        assert all([k >= num_terminal_pos for k in grammar.values()])
+        # All words have an associated terminal POS
+        assert all([word in vocab_terms for word in range(vocab_size)])
+
+        # The grammar is formatted correctly, with non-terminals
+        # in lowercase and terminals in uppercase
+        assert all([term.upper() == term for term in vocab_terms.values()])
+        assert all([nonterm.lower() == nonterm for nonterm in grammar.values()])
 
         self.z_dim = z_dim
         self.num_words = num_words
         self.vocab_size = vocab_size
-        self.num_terminal_pos = num_terminal_pos
+        self.roots = roots
         self.precision = precision
         self.noise_ratio = noise_ratio
         self.composition = composition
         self.random_state = np.random.RandomState(random_seed)
+
+        # Invert the dictionaries to turn represent it as a
+        # generative grammar (more convenient inside the class)
+        self.vocab_terms = {}
+        for word, term in vocab_terms.items():
+            if term not in self.vocab_terms:
+                self.vocab_terms[term] = []
+            self.vocab_terms[term].append(word)
+        self.grammar = {}
+        for ij, k in grammar.items():
+            if k not in self.grammar:
+                self.grammar[k] = []
+            self.grammar[k].append(ij)
+        self.parser = self.make_parser()
 
         self.word_embeddings = skellam.approx_gaussian_sample(
             mean=0.0,
@@ -319,9 +336,28 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
             precision=precision,
             random_state=self.random_state,
         ).astype(np.float32)
-        self.word_pos = {i: i % num_terminal_pos for i in range(vocab_size)}
-        self.grammar = grammar
-        self.rules = {ij: self.sample_rule() for ij in self.grammar}
+        self.rules = {ij: self.sample_rule() for ij in grammar}
+
+    def make_parser(self) -> Lark:
+        start = "start: " + " | ".join(self.roots)
+
+        rules = {
+            k: " | ".join([f'{i} " " {j}' for i, j in ij])
+            for k, ij in self.grammar.items()
+        }
+        rules = "\n".join([f"{k}: {ij}" for k, ij in rules.items()])
+
+        terminals = {
+            term: [f'"{str(word)}"' for word in words]
+            for term, words in self.vocab_terms.items()
+        }
+        terminals = {term: " | ".join(words) for term, words in terminals.items()}
+        terminals = "\n".join([f"{term}: {words}" for term, words in terminals.items()])
+
+        grammar = "\n".join([start, rules, terminals])
+        parser = Lark(grammar, start="start")
+
+        return parser
 
     def sample_rule(self) -> Any:
         if self.composition == "linear":
@@ -336,6 +372,14 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
         else:
             raise ValueError("Composition type not recognized")
 
+    def parse_w(self, w: np.ndarray) -> list[Tree]:
+        w_parses = []
+        for wi in w:
+            wi = " ".join([str(word) for word in wi])
+            parse = self.parser.parse(wi).children[0]
+            w_parses.append(parse)
+        return w_parses
+
     def apply_rule(self, x: np.ndarray, y: np.ndarray, rule_params: Any):
         if self.composition == "linear":
             return np.concatenate([x, y]) @ rule_params
@@ -343,28 +387,36 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
             raise ValueError("Composition type not recognized")
 
     def decode_w(self, w: np.ndarray) -> np.ndarray:
+        def decode_parse(parse: Tree):
+            if parse.data.isnumeric():
+                word = int(parse.data)
+                return self.word_embeddings[word]
+            else:
+                x, y = parse.children
+                x_pos, y_pos = x.data, y.data
+                x_z, y_z = decode_parse(x), decode_parse(y)
+                rule_params = self.rules[(x_pos, y_pos)]
+                return self.apply_rule(x_z, y_z, rule_params)
+
         z = []
-        for wi in w:
-            pos = [self.word_pos[word] for word in wi]
-            zi = [self.word_embeddings[word] for word in wi]
-            while len(zi) > 1:
-                pos_next, z_next = [], []
-                for i in range(0, len(zi), 2):
-                    rule_params = self.rules[(pos[i], pos[i + 1])]
-                    out_pos = self.grammar[(pos[i], pos[i + 1])]
-                    out_z = self.apply_rule(zi[i], zi[i + 1], rule_params)
-                    pos_next.append(out_pos), z_next.append(out_z)
-                pos, zi = pos_next, z_next
-            z.append(zi[0])
+        w_parses = self.parse_w(w)
+        for parse in w_parses:
+            z.append(decode_parse(parse))
         return np.stack(z)
 
     @property
     def k_language(self) -> float:
-        # Have to specify the bits for two integer numbers that define the uniform distribution, and the rest of p(w) has (small) constant complexity.
+        # Have to specify the bits for two integer numbers that define the uniform
+        # distribution, and the rest of p(w) has (small) constant complexity.
         return np.log(self.vocab_size) + np.log(self.num_words)
 
     @property
     def k_decoder(self) -> float:
+        # Have to specify the rule semantics and the parsing algorithm.
+        # The parsing algorithm grows in complexity as a function of the grammar size.
+        # The rule semantics grow in complexity as a function of the vocabulary size
+        # and the grammar size. We can therefore compute the complexity
+        # by counting the number of bits needed to specify the rule semantics.
         logp_emb = skellam.approx_gaussian_logpmf(
             x=self.word_embeddings, mean=0.0, std=1.0, precision=self.precision
         ).sum()
