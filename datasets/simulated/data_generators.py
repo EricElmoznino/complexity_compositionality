@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Literal, Any
 import numpy as np
-from lark import Lark, Tree
+from lark import Lark, Tree, Token
 from utils import skellam
 
 
@@ -246,7 +246,7 @@ class LookupTableDataGenerator(SimulatedDataGenerator):
         return -logp
 
     def sample_w(self, n: int) -> np.ndarray:
-        return np.random.randint(0, self.vocab_size, size=(n, self.num_words))
+        return self.random_state.randint(0, self.vocab_size, size=(n, self.num_words))
 
     def sample_z_given_w(self, w: np.ndarray) -> np.ndarray:
         z = self.decode_w(w)
@@ -288,6 +288,7 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
         vocab_terms: dict[int, str],
         grammar: dict[tuple[str, str], str],
         roots: list[str],
+        language: dict[str, list[str]] | None = None,
         precision: float = 0.01,
         noise_ratio: float = 0.1,
         composition: CompositionType = "linear",
@@ -306,6 +307,17 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
         assert all([term.upper() == term for term in vocab_terms.values()])
         assert all([nonterm.lower() == nonterm for nonterm in grammar.values()])
 
+        # Valid language sequence generation model
+        if language is not None:
+            assert "START" in language
+            for term in vocab_terms.values():
+                assert term in language
+            for i, js in language.items():
+                if i != "START":
+                    assert i in vocab_terms.values()
+                for j in js:
+                    assert j in vocab_terms.values()
+
         self.z_dim = z_dim
         self.num_words = num_words
         self.vocab_size = vocab_size
@@ -315,7 +327,7 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
         self.composition = composition
         self.random_state = np.random.RandomState(random_seed)
 
-        # Invert the dictionaries to turn represent it as a
+        # Invert the dictionaries to represent it as a
         # generative grammar (more convenient inside the class)
         self.vocab_terms = {}
         for word, term in vocab_terms.items():
@@ -327,7 +339,26 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
             if k not in self.grammar:
                 self.grammar[k] = []
             self.grammar[k].append(ij)
+
+        # Grammar parser
         self.parser = self.make_parser()
+
+        # Sequence generation model
+        if language is None:
+            terms = list(self.vocab_terms.keys())
+            self.language = {"START": terms, **{term: terms for term in terms}}
+        else:
+            self.language = language
+        self.transition_matrix = np.zeros((vocab_size + 1, vocab_size))
+        for i, js in self.language.items():
+            term_i_words = self.vocab_terms[i] if i != "START" else [vocab_size]
+            for j in js:
+                term_j_words = self.vocab_terms[j]
+                self.transition_matrix[
+                    np.array(term_i_words).reshape(-1, 1),
+                    np.array(term_j_words).reshape(1, -1),
+                ] = 1
+        self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
 
         self.word_embeddings = skellam.approx_gaussian_sample(
             mean=0.0,
@@ -355,7 +386,7 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
         terminals = "\n".join([f"{term}: {words}" for term, words in terminals.items()])
 
         grammar = "\n".join([start, rules, terminals])
-        parser = Lark(grammar, start="start")
+        parser = Lark(grammar, start="start", parser="earley")
 
         return parser
 
@@ -387,13 +418,14 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
             raise ValueError("Composition type not recognized")
 
     def decode_w(self, w: np.ndarray) -> np.ndarray:
-        def decode_parse(parse: Tree):
-            if parse.data.isnumeric():
-                word = int(parse.data)
+        def decode_parse(parse: Tree | Token):
+            if isinstance(parse, Token):
+                word = int(parse.value)
                 return self.word_embeddings[word]
             else:
                 x, y = parse.children
-                x_pos, y_pos = x.data, y.data
+                x_pos = x.data.value if isinstance(x, Tree) else x.type
+                y_pos = y.data.value if isinstance(y, Tree) else y.type
                 x_z, y_z = decode_parse(x), decode_parse(y)
                 rule_params = self.rules[(x_pos, y_pos)]
                 return self.apply_rule(x_z, y_z, rule_params)
@@ -406,9 +438,14 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
 
     @property
     def k_language(self) -> float:
-        # Have to specify the bits for two integer numbers that define the uniform
-        # distribution, and the rest of p(w) has (small) constant complexity.
-        return np.log(self.vocab_size) + np.log(self.num_words)
+        # Have to specify:
+        # 1) The terminal POS for each vocabulary item, which is a vocab_size'd list of integers that each take log(num_terms) bits to encode
+        # 2) The permissible terminal POS's that follow each other, which is a (num_terms + 1) x num_terms matrix of binary values (the +1 is for the start token)
+        vocab_bits = self.vocab_size * np.log(len(self.vocab_terms))
+        transition_bits = (
+            (len(self.vocab_terms) + 1) * len(self.vocab_terms) * np.log(2)
+        )
+        return vocab_bits + transition_bits
 
     @property
     def k_decoder(self) -> float:
@@ -434,7 +471,18 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
         return -(logp_emb + logp_rules)
 
     def sample_w(self, n: int) -> np.ndarray:
-        return np.random.randint(0, self.vocab_size, size=(n, self.num_words))
+        w = np.zeros((n, self.num_words + 1), dtype=int)
+        w[:, 0] = self.vocab_size  # Add start token
+        for i in range(self.num_words):
+            trans = self.transition_matrix[w[:, i]]
+            w[:, i + 1] = np.array(
+                [
+                    self.random_state.choice(self.vocab_size, p=trans[i])
+                    for i in range(n)
+                ]
+            )
+        w = w[:, 1:]  # Remove start token
+        return w
 
     def sample_z_given_w(self, w: np.ndarray) -> np.ndarray:
         z = self.decode_w(w)
