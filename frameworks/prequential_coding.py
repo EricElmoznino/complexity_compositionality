@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
+from typing import Any
 import os
 import torch
-from torch import nn, Tensor, FloatTensor
+from torch import nn, Tensor, FloatTensor, LongTensor
 from torch.nn import functional as F
 from lightning import LightningModule
+from torchmetrics.classification import MulticlassExactMatch
 from datasets.prequential_data import PrequentialDataPipe, PrequentialDataModule
 from models.decoders import SentenceDecoder
 from utils import skellam
@@ -35,10 +37,28 @@ class PrequentialCoding(ABC, LightningModule):
             self.model_cache_dir = os.environ["SLURM_TMPDIR"]
 
     @abstractmethod
-    def forward(self, data: dict[str, Tensor], encode: bool = False) -> FloatTensor:
-        # Returns the negative log-likelihood of the data given the model,
+    def forward(self, data: dict[str, Tensor]) -> Any:
+        # Model predictions
+        pass
+
+    @abstractmethod
+    def nll(
+        self,
+        pred: Any,
+        data: dict[str, Tensor],
+        encode: bool = False,
+    ) -> FloatTensor:
+        # Returns the negative log-likelihood of the data given the model's predictions,
         # either for the loss or for encoding.
         pass
+
+    def log_additional_performance_metrics(
+        self,
+        pred: Any,
+        data: dict[str, Tensor],
+        stage: str,
+    ) -> None:
+        return
 
     @abstractmethod
     def compute_naive_length(self) -> float:
@@ -46,13 +66,19 @@ class PrequentialCoding(ABC, LightningModule):
         pass
 
     def training_step(self, data, batch_idx):
-        loss = self.forward(data)
-        self.log("loss/train", loss, on_step=False, on_epoch=True, prog_bar=True)
+        pred = self.forward(data)
+        loss = self.nll(pred, data)
+        self.log(
+            "training/train_loss", loss, on_step=False, on_epoch=True, prog_bar=True
+        )
+        self.log_additional_performance_metrics(pred, data, "train")
         return loss
 
     def validation_step(self, data, batch_idx):
-        loss = self.forward(data)
-        self.log("loss/val", loss, prog_bar=True)
+        pred = self.forward(data)
+        loss = self.nll(pred, data)
+        self.log("training/val_loss", loss, prog_bar=True)
+        self.log_additional_performance_metrics(pred, data, "val")
         return loss
 
     def on_train_start(self):
@@ -70,7 +96,7 @@ class PrequentialCoding(ABC, LightningModule):
 
     def on_train_epoch_end(self):
         # Check for improvement on validation set
-        val_loss = self.trainer.callback_metrics["loss/val"]
+        val_loss = self.trainer.callback_metrics["training/val_loss"]
         if val_loss < self.interval_best_loss - self.interval_patience_tol:
             self.interval_best_loss = val_loss
             self.interval_epochs_since_improvement = 0
@@ -109,7 +135,8 @@ class PrequentialCoding(ABC, LightningModule):
         neg_logp = 0
         for data in dataloader:
             data = {k: v.to(self.device) for k, v in data.items()}
-            neg_logp += self.forward(data, encode=True).detach().cpu().item()
+            pred = self.forward(data)
+            neg_logp += self.nll(pred, data, encode=True).detach().cpu().item()
 
         if mode == "encode":
             neg_logp = min(neg_logp, self.compute_naive_length())
@@ -152,28 +179,66 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
         discrete_z: bool = False,
         z_num_attributes: int | None = None,
         z_num_vals: int | None = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.save_hyperparameters(ignore=["model"])
         self.model: SentenceDecoder  # Just for type annotation
+        if discrete_z:
+            self.train_accuracy = MulticlassExactMatch(num_classes=z_num_vals)
+            self.val_accuracy = MulticlassExactMatch(num_classes=z_num_vals)
 
-    def forward(self, data: dict[str, Tensor], encode: bool = False) -> FloatTensor:
-        w, z_true = data["w"], data["z"] # z true is one hot encoded when it should not be, indices and int
-        z_mu, z_logstd = self.model(w)
+    def forward(
+        self, data: dict[str, Tensor]
+    ) -> FloatTensor | tuple[FloatTensor, FloatTensor]:
+        w: LongTensor = data["w"]
+        z_mu, z_logstd = self.model.forward(w)
         if self.hparams.discrete_z:
             z_logits = z_mu.view(
                 -1, self.hparams.z_num_attributes, self.hparams.z_num_vals
             )
+            return z_logits
+        else:
+            return z_mu, z_logstd
+
+    def nll(
+        self,
+        pred: FloatTensor | tuple[FloatTensor, FloatTensor],
+        data: dict[str, Tensor],
+        encode: bool = False,
+    ) -> FloatTensor:
+        z_true = data["z"]
+        if self.hparams.discrete_z:
+            z_logits = pred
             dist = torch.distributions.Categorical(logits=z_logits)
             logp = dist.log_prob(z_true)
         else:
+            z_mu, z_logstd = pred
             if encode:
                 logp = skellam.approx_gaussian_logpmf(z_true, z_mu, z_logstd.exp())
             else:
                 logp = torch.distributions.Normal(z_mu, z_logstd.exp()).log_prob(z_true)
         logp = logp.sum() if encode else logp.mean()
         return -logp
+
+    def log_additional_performance_metrics(
+        self,
+        pred: FloatTensor | tuple[FloatTensor, FloatTensor],
+        data: dict[str, Tensor],
+        stage: str,
+    ) -> None:
+        if not self.hparams.discrete_z:
+            return
+        accuracy = self.train_accuracy if stage == "train" else self.val_accuracy
+        z_logits = pred.transpose(1, 2)
+        accuracy(z_logits, data["z"])
+        self.log(
+            f"training/{stage}_accuracy",
+            accuracy,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+        )
 
     def compute_naive_length(self) -> float:
         if self.dataset.data_size_idx == 0:
