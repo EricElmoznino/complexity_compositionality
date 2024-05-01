@@ -278,7 +278,7 @@ class LookupTableDataGenerator(SimulatedDataGenerator):
 
 
 class SyntacticDataGenerator(SimulatedDataGenerator):
-    CompositionType = Literal["linear"]
+    CompositionType = Literal["linear", "tensorproduct"]
 
     def __init__(
         self,
@@ -360,6 +360,24 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
                 ] = 1
         self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
 
+        # Make role embeddings
+        if composition == "tensorproduct":
+            parts_of_speech = []
+            for rule_options in self.grammar.values():
+                for input_i, input_j in rule_options:
+                    parts_of_speech += [input_i, input_j]
+            parts_of_speech = set(parts_of_speech)
+            self.role_embeddings = {
+                pos: skellam.approx_gaussian_sample(
+                    mean=0.0,
+                    std=1.0,
+                    shape=(self.z_dim,),
+                    precision=self.precision,
+                    random_state=self.random_state,
+                ).astype(np.float32)
+                for pos in parts_of_speech
+            }
+
         self.word_embeddings = skellam.approx_gaussian_sample(
             mean=0.0,
             std=1.0,
@@ -367,7 +385,7 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
             precision=precision,
             random_state=self.random_state,
         ).astype(np.float32)
-        self.rules = {ij: self.sample_rule() for ij in grammar}
+        self.rules = {(i, j): self.make_rule(i, j) for i, j in grammar}
 
     def make_parser(self) -> Lark:
         start = "start: " + " | ".join(self.roots)
@@ -390,7 +408,7 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
 
         return parser
 
-    def sample_rule(self) -> Any:
+    def make_rule(self, i: str, j: str) -> Any:
         if self.composition == "linear":
             w = skellam.approx_gaussian_sample(
                 mean=0.0,
@@ -400,6 +418,9 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
                 random_state=self.random_state,
             ).astype(np.float32)
             return w
+        elif self.composition == "tensorproduct":
+            role_i, role_j = self.role_embeddings[i], self.role_embeddings[j]
+            return role_i, role_j
         else:
             raise ValueError("Composition type not recognized")
 
@@ -414,6 +435,11 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
     def apply_rule(self, x: np.ndarray, y: np.ndarray, rule_params: Any):
         if self.composition == "linear":
             return np.concatenate([x, y]) @ rule_params
+        elif self.composition == "tensorproduct":
+            # See https://arxiv.org/pdf/2106.01317#page=3.46
+            role_x, role_y = rule_params
+            tpr_i, tpr_j = (x * role_x + x), (y * role_y + y)
+            return tpr_i + tpr_j  # The sum here is arbitrary, the paper doesn't specify
         else:
             raise ValueError("Composition type not recognized")
 
@@ -464,6 +490,15 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
                         x=r, mean=0.0, std=1.0, precision=self.precision
                     ).sum()
                     for r in self.rules.values()
+                ]
+            )
+        elif self.composition == "tensorproduct":
+            logp_rules = sum(
+                [
+                    skellam.approx_gaussian_logpmf(
+                        x=role, mean=0.0, std=1.0, precision=self.precision
+                    ).sum()
+                    for role in self.role_embeddings.values()
                 ]
             )
         else:
