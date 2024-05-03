@@ -439,7 +439,9 @@ class SyntacticDataGenerator(SimulatedDataGenerator):
             # See https://arxiv.org/pdf/2106.01317#page=3.46
             role_x, role_y = rule_params
             tpr_i, tpr_j = (x * role_x + x), (y * role_y + y)
-            return tpr_i + tpr_j  # The sum here is arbitrary, the paper doesn't specify
+            # The sum below is arbitrary, the paper doesn't specify.
+            # However, summation is what's done in Eliasmith's VTB
+            return tpr_i + tpr_j
         else:
             raise ValueError("Composition type not recognized")
 
