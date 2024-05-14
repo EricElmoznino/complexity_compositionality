@@ -21,6 +21,7 @@ class PrequentialDataModule(LightningDataModule):
         data_increment: int,
         batch_size: int,
         num_workers: int = 0,
+        val_train_shared: bool = False,
         scramble_data_by: str | None = None,
     ):
         super().__init__()
@@ -32,6 +33,7 @@ class PrequentialDataModule(LightningDataModule):
             min_data_size=self.hparams.min_data_size,
             val_size=self.hparams.val_size,
             data_increment=self.hparams.data_increment,
+            val_train_shared=self.hparams.val_train_shared,
             scramble_data_by=self.hparams.scramble_data_by,
         )
 
@@ -61,6 +63,7 @@ class PrequentialDataPipe(MapDataPipe):
         min_data_size: int,
         val_size: int,
         data_increment: int,
+        val_train_shared: bool = False,
         scramble_data_by: str | None = None,
     ):
         super().__init__()
@@ -68,6 +71,8 @@ class PrequentialDataPipe(MapDataPipe):
         self.min_data_size = min_data_size
         self.val_size = val_size
         self.data_increment = data_increment
+        self.val_train_shared = val_train_shared
+
         self.data = {
             f.replace(".pt", ""): torch.load(
                 os.path.join(data_dir, f), map_location="cpu", mmap=False
@@ -75,9 +80,15 @@ class PrequentialDataPipe(MapDataPipe):
             for f in os.listdir(data_dir)
             if f.endswith(".pt")
         }
-        self.train_size = self.data[list(self.data.keys())[0]].shape[0] - val_size
+
+        self.total_size = self.data[list(self.data.keys())[0]].shape[0]
+        if val_train_shared:
+            self.train_size = self.total_size
+        else:
+            self.train_size = self.total_size - val_size
         self.data_sizes = np.arange(min_data_size, self.train_size + 1, data_increment)
         self.data_size_idx = 0
+
         self.mode = "train"
         assert (
             len(self.data_sizes) > 1
@@ -144,7 +155,7 @@ class PrequentialDataPipe(MapDataPipe):
 
     def __getitem__(self, index) -> dict[str, Tensor]:
         if self.mode == "val":
-            index += self.train_size
+            index += self.total_size - self.val_size
         elif self.mode == "encode":
             index += self.data_sizes[self.data_size_idx - 1]
         index = self._idx_map(index)

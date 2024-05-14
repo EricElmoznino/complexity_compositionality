@@ -29,6 +29,7 @@ data:
   val_size: 2000
   data_increment: 100
   batch_size: 100
+  val_train_shared: True
   scramble_data_by: "z"
 
 trainer:
