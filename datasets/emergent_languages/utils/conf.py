@@ -43,9 +43,11 @@ parser.add_argument(
 parser.add_argument(
     "--sel_candi", type=int, default=15, help="candiates for the listene"
 )
-parser.add_argument("--num_sys", type=int, default=8, help="number of attributes")
+parser.add_argument("--num_attr", type=int, default=2, help="number of attributes")
+parser.add_argument("--num_sys", type=int, default=8, help="number of attribute values")
 parser.add_argument("--voc_len_add", type=int, default=0, help="added vocabulary size")
 parser.add_argument("--msg_len_add", type=int, default=0, help="added msg length size")
+parser.add_argument("--repr_dim", type=int, default=128, help="representation dim")
 parser.add_argument("--Ia", type=int, default=1200, help="pretrain rounds of Alice")
 parser.add_argument("--Ib", type=int, default=200, help="pretrain rounds of Bob")
 parser.add_argument("--Ig", type=int, default=3000, help="rounds of interaction")
@@ -77,10 +79,10 @@ OPTIMISER = optim.Adam
 hyperparameters of model
 """
 SEL_CANDID = args.sel_candi  # Number of candidate when selecting
-ATTRI_SIZE = 2  # Number of attributes, i.e., number of digits
+ATTRI_SIZE = args.num_attr  # Number of attributes, i.e., number of digits
 NUM_SYSTEM = args.num_sys  # Number system, usually just use decimal
-HIDDEN_SIZE = 128
-BATCH_SIZE = NUM_SYSTEM**ATTRI_SIZE
+HIDDEN_SIZE = args.repr_dim  # Hidden size of the model
+BATCH_SIZE = 64
 MSG_MAX_LEN = ATTRI_SIZE + args.msg_len_add  # Controlled by ourselves
 VALID_NUM = args.valid_num  # Ratio of valid set to train set
 
