@@ -308,6 +308,8 @@ for i in range(args.max_gen):
 
     # ====================== Calculate Validation Score ===========================
     for val in range(200):
+        if VALID_NUM == 0:  # No validation data
+            break
         _, batch_list_valid = batch_data_gen_valid(train_list, valid_list)
         valid_full, valid_candidates = (
             batch_list_valid[0]["data"],
@@ -364,7 +366,8 @@ np.save(os.path.join(args.path, "comp_ps.npy"), comp_ps)
 np.save(os.path.join(args.path, "rewards.npy"), rewards)
 np.save(os.path.join(args.path, "msg_types.npy"), np.asarray(msg_types))
 # np.save(os.path.join(args.path, "comp_generations.npy"), np.asarray(comp_generations))
-np.save(os.path.join(args.path, "valid_accs"), np.asarray(valid_accs))
+if len(valid_accs) > 0:
+    np.save(os.path.join(args.path, "valid_accs"), np.asarray(valid_accs))
 msg_print_to_file(max_msg_all, args.path)
 
 w, z = get_w_and_z(speaker, all_list, n_repeats=args.n_object_save_repeats)
