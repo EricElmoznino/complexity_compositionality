@@ -4,20 +4,21 @@ framework:
   _target_: frameworks.prequential_coding.PrequentialCodingSentenceDecoder
   lr: 0.001
   discrete_z: True
-  z_num_attributes: 4
-  z_num_vals: 10
+  z_num_attributes: 2
+  z_num_vals: 8
   interval_patience: 50
   interval_patience_tol: 0.001
   include_initial_length: True
+  allow_final_overfit: True
   model:
     _target_: models.decoders.SentenceDecoder
-    vocab_size: 10
+    vocab_size: ${..z_num_vals}
     embedding_decoder:
       _target_: models.decoders.MLPEmbeddingDecoder
       emb_dim: 64
-      num_words: 4
+      num_words: ${...z_num_attributes}
       repr_dim: ${ast_eval:'${...z_num_attributes} * ${...z_num_vals}'}
-      num_layers: 4
+      num_layers: 3
       hidden_dim: 256
       fixed_repr_std: 1.0
       dropout: 0.0
@@ -25,11 +26,10 @@ framework:
 data:
   _target_: datasets.prequential_data.PrequentialDataModule
   data_dir: null
-  min_data_size: 100
-  val_size: 2000
-  data_increment: 100
-  batch_size: 100
-  val_train_shared: True
+  min_data_size: 50
+  val_size: 400
+  data_increment: 50
+  batch_size: 50
   scramble_data_by: "z"
 
 trainer:

@@ -20,6 +20,7 @@ class PrequentialCoding(ABC, LightningModule):
         lr: float = 1e-3,
         model_cache_dir: str | None = None,
         include_initial_length: bool = True,
+        allow_final_overfit: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
@@ -95,10 +96,15 @@ class PrequentialCoding(ABC, LightningModule):
         self.dataset.set_mode("train")
 
     def on_train_epoch_end(self):
-        # Check for improvement on validation set
-        val_loss = self.trainer.callback_metrics["training/val_loss"]
-        if val_loss < self.interval_best_loss - self.interval_patience_tol:
-            self.interval_best_loss = val_loss
+        # Pick either validation set or training set for stopping criteria
+        if self.dataset.done and self.hparams.allow_final_overfit:
+            loss = self.trainer.callback_metrics["training/train_loss"]
+        else:
+            loss = self.trainer.callback_metrics["training/val_loss"]
+
+        # Check for improvement
+        if loss < self.interval_best_loss - self.interval_patience_tol:
+            self.interval_best_loss = loss
             self.interval_epochs_since_improvement = 0
             if self.model_cache_dir is not None:
                 torch.save(
@@ -250,11 +256,12 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
                 ] : self.dataset.data_sizes[self.dataset.data_size_idx]
             ]
         if self.hparams.discrete_z:
-            z_marginal = (
-                F.one_hot(z, num_classes=self.hparams.z_num_vals).float().mean(dim=0)
+            z_uniform = torch.distributions.Categorical(
+                logits=torch.ones(
+                    self.hparams.z_num_attributes, self.hparams.z_num_vals
+                ).to(z.device)
             )
-            z_marginal = torch.distributions.Categorical(probs=z_marginal)
-            logp = z_marginal.log_prob(z)
+            logp = z_uniform.log_prob(z)
         else:
             z_marginal_mu, z_marginal_std = z.mean(dim=0), z.std(dim=0)
             logp = skellam.approx_gaussian_logpmf(z, z_marginal_mu, z_marginal_std)
