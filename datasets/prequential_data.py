@@ -73,9 +73,10 @@ class PrequentialDataPipe(MapDataPipe):
         self.data_increment = data_increment
         self.val_train_shared = val_train_shared
 
+        # Note: This loads the entire dataset in RAM. For larger datasets, we should use save the data using numpy, load it using mmap_mode='r', and convert batches to tensors only in __getitem__().
         self.data = {
             f.replace(".pt", ""): torch.load(
-                os.path.join(data_dir, f), map_location="cpu", mmap=False
+                os.path.join(data_dir, f), map_location="cpu"
             )
             for f in os.listdir(data_dir)
             if f.endswith(".pt")
