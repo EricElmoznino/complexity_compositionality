@@ -3,6 +3,7 @@ BASE_NAME=emergent_languages_2attr_8vals
 
 python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/logs \
 experiment=prequential/emergent_languages \
+seed=0,1,2,3,4 \
 ++experiment.data.data_dir=\
 "${BASE_DIR}/${BASE_NAME}_resets_seed-1",\
 "${BASE_DIR}/${BASE_NAME}_no-resets_seed-1",\
