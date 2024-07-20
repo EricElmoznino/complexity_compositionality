@@ -6,7 +6,7 @@ from torch import nn, Tensor, FloatTensor, LongTensor
 from torch.nn import functional as F
 from lightning import LightningModule
 from torchmetrics.classification import MulticlassExactMatch
-from datasets.prequential_data import PrequentialDataPipe, PrequentialDataModule
+from custom_datasets.prequential_data import PrequentialDataPipe, PrequentialDataModule
 from models.decoders import SentenceDecoder
 from utils import skellam
 
