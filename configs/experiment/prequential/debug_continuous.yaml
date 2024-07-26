@@ -23,7 +23,7 @@ framework:
       dropout: 0.0
 
 data:
-  _target_: datasets.debug_data.DebugPrequentialDataModule
+  _target_: custom_datasets.debug_data.DebugPrequentialDataModule
   data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/prequential_debug/continuous_disentanglement:1"
   min_data_size: 100
   val_size: 2000

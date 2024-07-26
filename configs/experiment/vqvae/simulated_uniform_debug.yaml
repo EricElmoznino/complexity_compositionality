@@ -46,7 +46,7 @@ framework:
     embedding_lookup_type: "linear"
     
 data:
-  _target_: datasets.tensor_data.TensorDataModule
+  _target_: custom_datasets.tensor_data.TensorDataModule
   train_filepath: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/data/simulated/uniform/vocab_size=100_d=256_k=32_nsamples=100000/z_train.pt"
   val_filepath: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/data/simulated/uniform/vocab_size=100_d=256_k=32_nsamples=100000/z_test.pt"
   batch_size: 64
