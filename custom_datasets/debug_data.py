@@ -6,7 +6,7 @@ from lightning import LightningDataModule
 from torchvision.datasets import MNIST
 from torchvision import transforms
 import warnings
-from datasets.prequential_data import PrequentialDataModule
+from custom_datasets.prequential_data import PrequentialDataModule
 
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 

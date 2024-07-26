@@ -4,7 +4,7 @@ import math
 import torch
 from torch import nn, FloatTensor, LongTensor
 from models.utils import learned_token_encodings, positional_token_encodings, MLP
-
+from sentence_transformers import SentenceTransformer
 
 ##############################################################
 #################### Embedding decoders ######################
@@ -191,6 +191,21 @@ class IdentityEmbeddingDecoder(EmbeddingDecoder):
         w_emb = w_emb.reshape(w_emb.shape[0], -1)
         return w_emb, torch.zeros_like(w_emb)
 
+
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        nn.init.xavier_uniform_(m.weight)
+        nn.init.zeros_(m.bias)
+
+
+class HuggingFaceEmbeddingDecoder():
+    def __init__(self, emb_dim: int):
+        self.model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
+        self.model.apply(init_weights)
+        self.emb_dim = emb_dim
+
+    def __call__(self, x):
+        return self.model.encode(x)
 
 ##############################################################
 ##################### Sentence decoders ######################

@@ -1,0 +1,1 @@
+PROMPTS_FOLDER = "/home/mila/t/thomas.jiralerspong/kolmogorov/complexity_compositionality/datasets/real_languages/prompts"
