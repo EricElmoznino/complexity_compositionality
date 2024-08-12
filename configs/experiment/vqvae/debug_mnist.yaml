@@ -84,7 +84,7 @@ framework:
     embedding_lookup_type: "linear"
     
 data:
-  _target_: custom_datasets.debug_data.MNISTDataModule
+  _target_: dataloaders.debug_data.MNISTDataModule
   data_path: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/mnist"
   batch_size: 64
   num_workers: 4

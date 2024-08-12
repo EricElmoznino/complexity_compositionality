@@ -24,7 +24,7 @@ framework:
       # dropout: 0.0
 
 data:
-  _target_: custom_datasets.debug_data.DebugPrequentialDataModule
+  _target_: dataloaders.debug_data.DebugPrequentialDataModule
   data_dir: "/network/scratch/t/thomas.jiralerspong/kolmogorov/results/to_prequential_code/with_reset_topo=0.234_acc=84"
   min_data_size: 100 # keep same as data_increment, where starting to actually fit models
   val_size: 2000
