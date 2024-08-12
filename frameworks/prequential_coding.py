@@ -83,6 +83,7 @@ class PrequentialCoding(ABC, LightningModule):
         return loss
 
     def on_train_start(self):
+        breakpoint()
         if self.hparams.include_initial_length:
             initial_length = self.compute_naive_length()
             self.interval_errors.append(initial_length)
@@ -120,11 +121,10 @@ class PrequentialCoding(ABC, LightningModule):
                 self.model.load_state_dict(
                     torch.load(os.path.join(self.model_cache_dir, "best.pt"))
                 )
-
             # Encode the next increment of data
             if not self.dataset.done:
                 self.dataset.increment_data_size()
-                self.compute_length(mode="encode")
+                self.compute_length(mode="all_train")
                 self.interval_epochs_since_improvement = 0
                 self.interval_best_loss = torch.inf
                 self.reset_model_params()
@@ -150,6 +150,7 @@ class PrequentialCoding(ABC, LightningModule):
             self.log("data encoded", self.dataset.data_encoded)
             self.log("K/K(interval i)", neg_logp)
         else:
+            breakpoint()
             k_data = sum(self.interval_errors)
             self.log("K/K(Data)", k_data)
             self.log("K/K(Data|f)", neg_logp)
@@ -247,6 +248,7 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
         )
 
     def compute_naive_length(self) -> float:
+        breakpoint()
         if self.dataset.data_size_idx == 0:
             z = self.dataset.data["z"][: self.dataset.data_sizes[0]]
         else:

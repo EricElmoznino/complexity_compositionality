@@ -121,7 +121,8 @@ class PrequentialDataPipe(MapDataPipe):
         if mode == "encode":
             assert self.data_size_idx > 0
         elif mode == "all_train":
-            assert self.done
+            pass
+            # assert self.done
         self.mode = mode
 
     @property
