@@ -10,23 +10,19 @@ def approx_gaussian_logpmf(
     std: FloatTensor | np.ndarray | float,
     precision: float = 1e-2,
 ) -> FloatTensor | np.ndarray:
-    if x.dtype == torch.float32:
+    x -= mean
+    if x.dtype == torch.float:
         return_torch = True
-        x, mean, std = (
+        x, std = (
             x.detach().cpu().numpy(),
-            mean.detach().cpu().numpy(),
             std.detach().cpu().numpy(),
         )
     else:
         return_torch = False
-
-    breakpoint()
-    x, mean, std = x / precision, mean / precision, std / precision
-    var = std**2
-    x, mean, var = np.round(x), np.round(mean), np.round(var)
-    mu1 = (mean + var) / 2
-    mu2 = mu1 - mean
-    logpmf = skellam.logpmf(x, mu1, mu2)
+    x, std = x / precision, std / precision
+    x = np.round(x)
+    mu = (std**2) / 2
+    logpmf = skellam.logpmf(x, mu, mu)
     if return_torch:
         logpmf = torch.from_numpy(logpmf)
     return logpmf
@@ -39,11 +35,8 @@ def approx_gaussian_sample(
     precision: float = 1e-2,
     random_state: np.random.RandomState | None = None,
 ):
-    mean, std = mean / precision, std / precision
-    var = std**2
-    mean, var = np.round(mean), np.round(var)
-    mu1 = (mean + var) / 2
-    mu2 = mu1 - mean
-    samples = skellam.rvs(mu1, mu2, size=shape, random_state=random_state)
-    samples = samples * precision
+    std = std / precision
+    mu = (std**2) / 2
+    samples = skellam.rvs(mu, mu, size=shape, random_state=random_state)
+    samples = samples * precision + mean
     return samples

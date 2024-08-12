@@ -6,7 +6,7 @@ from torch import nn, Tensor, FloatTensor, LongTensor
 from torch.nn import functional as F
 from lightning import LightningModule
 from torchmetrics.classification import MulticlassExactMatch
-from custom_datasets.prequential_data import PrequentialDataPipe, PrequentialDataModule
+from dataloaders.prequential_data import PrequentialDataPipe, PrequentialDataModule
 from models.decoders import SentenceDecoder
 from utils import skellam
 
@@ -265,6 +265,9 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
             )
             logp = z_uniform.log_prob(z)
         else:
-            z_marginal_mu, z_marginal_std = z.mean(dim=0), z.std(dim=0)
+            z_marginal_mu, z_marginal_std = (
+                z.mean(dim=0, keepdim=True).expand_as(z),
+                z.std(dim=0, keepdim=True).expand_as(z),
+            )
             logp = skellam.approx_gaussian_logpmf(z, z_marginal_mu, z_marginal_std)
         return -logp.sum().item()
