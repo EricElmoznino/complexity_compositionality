@@ -32,7 +32,6 @@ zs = torch.cat(zs, dim=0)
 
 
 
-breakpoint()
 os.makedirs(SAVE_PATH, exist_ok=True)
 torch.save(w, f"{SAVE_PATH}/w.pt")
 torch.save(zs, f"{SAVE_PATH}/z.pt")

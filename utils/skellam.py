@@ -10,23 +10,20 @@ def approx_gaussian_logpmf(
     std: FloatTensor | np.ndarray | float,
     precision: float = 1e-2,
 ) -> FloatTensor | np.ndarray:
+    x -= mean
     if x.dtype == torch.float32:
         return_torch = True
-        x, mean, std = (
+        x, std = (
             x.detach().cpu().numpy(),
-            mean.detach().cpu().numpy(),
             std.detach().cpu().numpy(),
         )
     else:
         return_torch = False
 
-    breakpoint()
-    x, mean, std = x / precision, mean / precision, std / precision
-    var = std**2
-    x, mean, var = np.round(x), np.round(mean), np.round(var)
-    mu1 = (mean + var) / 2
-    mu2 = mu1 - mean
-    logpmf = skellam.logpmf(x, mu1, mu2)
+    x, std = x / precision, std / precision
+    x = np.round(x)
+    mu = (std**2) / 2
+    logpmf = skellam.logpmf(x, mu, mu)
     if return_torch:
         logpmf = torch.from_numpy(logpmf)
     return logpmf

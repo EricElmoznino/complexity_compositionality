@@ -6,7 +6,7 @@ framework:
   discrete_z: False
   z_num_attributes: null
   z_num_vals: null
-  interval_patience: 2 # -- if too slow, decrease - is number of steps to wait before restarting training
+  interval_patience: 15 # -- if too slow, decrease - is number of steps to wait before restarting training
   interval_patience_tol: 0.001
   include_initial_length: True
   model:
