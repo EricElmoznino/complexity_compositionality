@@ -25,7 +25,7 @@ framework:
       # dropout: 0.0
 
 data:
-  _target_: custom_datasets.prequential_data.PrequentialDataModule
+  _target_: dataloaders.prequential_data.PrequentialDataModule
   data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/results/real_languages/english"
   min_data_size: 100 # keep same as data_increment, where starting to actually fit models
   val_size: 2000

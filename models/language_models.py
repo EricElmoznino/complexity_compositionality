@@ -68,6 +68,7 @@ class TransformerEmbeddingLM(EmbeddingLM):
             )
 
         # Transformer
+        # TODO: This needs to be fixed to be a causal Transformer so that the prior is auto-regressive!
         layer_spec = nn.TransformerEncoderLayer(
             d_model=emb_dim,
             nhead=num_heads,

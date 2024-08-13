@@ -24,7 +24,7 @@ framework:
       dropout: 0.0
 
 data:
-  _target_: datasets.prequential_data.PrequentialDataModule
+  _target_: dataloaders.prequential_data.PrequentialDataModule
   data_dir: null
   min_data_size: 50
   val_size: 400
