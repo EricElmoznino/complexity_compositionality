@@ -4,7 +4,6 @@ import math
 import torch
 from torch import nn, FloatTensor, LongTensor
 from models.utils import learned_token_encodings, positional_token_encodings, MLP
-from sentence_transformers import SentenceTransformer
 
 ##############################################################
 #################### Embedding decoders ######################
@@ -192,36 +191,6 @@ class IdentityEmbeddingDecoder(EmbeddingDecoder):
         return w_emb, torch.zeros_like(w_emb)
 
 
-def init_weights(m):
-    if isinstance(m, nn.Linear):
-        nn.init.xavier_uniform_(m.weight)
-        nn.init.zeros_(m.bias)
-
-
-class HuggingFaceEmbeddingDecoder():
-    def __init__(self, emb_dim: int, fixed_repr_std: float):
-        self.model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2', device="cuda")
-        self.model.apply(init_weights)
-        self.emb_dim = emb_dim
-        self.fixed_repr_std = fixed_repr_std
-
-    def __call__(self, x):
-        # x = self.model.tokenize(x)
-
-        # build structure with input_ids and attention_mask
-        # input_ids is just w 
-        # attention_mask -> check documentation for attention_mask for SentenceTransformer -- maybe just set to 0 whenever padding token is 1
-        # ask ChatGPT !
-        attention_mask = torch.ones_like(x)
-        attention_mask[x == 1] = 0
-        x = {'input_ids': x, 'attention_mask': attention_mask}
-
-        # x = {'input_ids': x['input_ids'].to('cuda'), 'attention_mask': x['attention_mask'].to('cuda')}
-        out = self.model.forward(x)
-        z_mu = out['sentence_embedding']
-        z_logstd = math.log(self.fixed_repr_std) * torch.ones_like(z_mu)
-        return z_mu, z_logstd
-
 ##############################################################
 ##################### Sentence decoders ######################
 ##############################################################
@@ -245,13 +214,3 @@ class SentenceDecoder(nn.Module):
         """
         w_emb = self.embedding(w)
         return self.embedding_decoder(w_emb)
-
-class HuggingFaceSentenceDecoder(nn.Module):
-    def __init__(self, vocab_size: int, embedding_decoder: HuggingFaceEmbeddingDecoder) -> None:
-        super().__init__()
-        self.vocab_size = vocab_size
-        self.embedding_decoder = embedding_decoder
-        self.embedding = nn.Embedding(vocab_size, embedding_decoder.emb_dim)
-
-    def forward(self, w: LongTensor) -> tuple[FloatTensor, FloatTensor]:
-        return self.embedding_decoder(w)

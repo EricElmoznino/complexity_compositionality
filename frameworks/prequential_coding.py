@@ -1,11 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Any
+import math
 import os
 import torch
 from torch import nn, Tensor, FloatTensor, LongTensor
 from torch.nn import functional as F
 from lightning import LightningModule
 from torchmetrics.classification import MulticlassExactMatch
+from transformers import AutoModel
+from sentence_transformers import SentenceTransformer
 from dataloaders.prequential_data import PrequentialDataPipe, PrequentialDataModule
 from models.decoders import SentenceDecoder
 from utils import skellam
@@ -83,7 +86,6 @@ class PrequentialCoding(ABC, LightningModule):
         return loss
 
     def on_train_start(self):
-        breakpoint()
         if self.hparams.include_initial_length:
             initial_length = self.compute_naive_length()
             self.interval_errors.append(initial_length)
@@ -150,7 +152,6 @@ class PrequentialCoding(ABC, LightningModule):
             self.log("data encoded", self.dataset.data_encoded)
             self.log("K/K(interval i)", neg_logp)
         else:
-            breakpoint()
             k_data = sum(self.interval_errors)
             self.log("K/K(Data)", k_data)
             self.log("K/K(Data|f)", neg_logp)
@@ -248,7 +249,6 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
         )
 
     def compute_naive_length(self) -> float:
-        breakpoint()
         if self.dataset.data_size_idx == 0:
             z = self.dataset.data["z"][: self.dataset.data_sizes[0]]
         else:
@@ -270,4 +270,65 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
                 z.std(dim=0, keepdim=True).expand_as(z),
             )
             logp = skellam.approx_gaussian_logpmf(z, z_marginal_mu, z_marginal_std)
+        return -logp.sum().item()
+
+
+class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
+    def __init__(
+        self,
+        *args,
+        model_name: str,
+        short_vocab_size: int,
+        **kwargs,
+    ):
+        model = SentenceTransformer(model_name)
+        self.config = model[0].auto_model.config
+        self.config.vocab_size = short_vocab_size
+
+        super().__init__(*args, model=model, **kwargs)
+        self.save_hyperparameters(ignore=["model"])
+
+    def reset_model_params(self):
+        self.model[0].auto_model = AutoModel.from_config(self.config)
+
+    def forward(
+        self, data: dict[str, Tensor]
+    ) -> FloatTensor | tuple[FloatTensor, FloatTensor]:
+        w: LongTensor = data["w"]
+        attention_mask = torch.ones_like(w)
+        attention_mask[w == 1] = 0
+        w = {"input_ids": w, "attention_mask": attention_mask}
+        z_mu = self.model.forward(w)
+        z_logstd = math.log(1.0) * torch.ones_like(z_mu)
+        return z_mu, z_logstd
+
+    def nll(
+        self,
+        pred: FloatTensor | tuple[FloatTensor, FloatTensor],
+        data: dict[str, Tensor],
+        encode: bool = False,
+    ) -> FloatTensor:
+        z_true = data["z"]
+        z_mu, z_logstd = pred
+        if encode:
+            logp = skellam.approx_gaussian_logpmf(z_true, z_mu, z_logstd.exp())
+        else:
+            logp = torch.distributions.Normal(z_mu, z_logstd.exp()).log_prob(z_true)
+        logp = logp.sum() if encode else logp.mean()
+        return -logp
+
+    def compute_naive_length(self) -> float:
+        if self.dataset.data_size_idx == 0:
+            z = self.dataset.data["z"][: self.dataset.data_sizes[0]]
+        else:
+            z = self.dataset.data["z"][
+                self.dataset.data_sizes[
+                    self.dataset.data_size_idx - 1
+                ] : self.dataset.data_sizes[self.dataset.data_size_idx]
+            ]
+        z_marginal_mu, z_marginal_std = (
+            z.mean(dim=0, keepdim=True).expand_as(z),
+            z.std(dim=0, keepdim=True).expand_as(z),
+        )
+        logp = skellam.approx_gaussian_logpmf(z, z_marginal_mu, z_marginal_std)
         return -logp.sum().item()

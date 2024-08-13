@@ -1,50 +1,21 @@
 name: "Prequential Coding - Emergent Languages"
-# Look at debug_continuous.yaml
+
 framework:
-  _target_: frameworks.prequential_coding.PrequentialCodingSentenceDecoder
-  lr: 0.001
-  discrete_z: False
-  z_num_attributes: null
-  z_num_vals: null
-  interval_patience: 2 # -- if too slow, decrease - is number of steps to wait before restarting training
+  _target_: frameworks.prequential_coding.PrequentialCodingHuggingFaceSentence
+  lr: 0.0001
+  interval_patience: 5
   interval_patience_tol: 0.001
   include_initial_length: True
-  model:
-    _target_: models.decoders.HuggingFaceSentenceDecoder
-    vocab_size: 16600
-    embedding_decoder: # Use same architecture as the sentence embedding encoder, use same padding token, take from huggingface uninitialized
-      # to use HuggingFace, write wrapper class around Hugging Face model
-      _target_: models.decoders.HuggingFaceEmbeddingDecoder
-      emb_dim: 768
-      fixed_repr_std: 0.35
-      # num_words: ${....data.num_words}
-      # repr_dim: ${repr_dim:'${....data.num_words} * ${....data.vocab_size}'} # 40
-      # num_layers: 4
-      # hidden_dim: 256
-      # fixed_repr_std: 0.35 # 1.0
-      # dropout: 0.0
+  model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+  short_vocab_size: 16600
 
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
   data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/results/real_languages/english"
-  min_data_size: 100 # keep same as data_increment, where starting to actually fit models
+  min_data_size: 100
   val_size: 2000
-  data_increment: 100 # number of data points to add each time, can increase if too slow
+  data_increment: 100
   batch_size: 15
-  # num_words: 106 # Use max length across dataset and pad
-  # vocab_size: 16600 # Check tokenizer
-  # disentanglement: 1
-  # discrete: False
-  # z_dim: 768
-  # num_attributes: null
-  # num_vals: null
-  # data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/results/real_languages/english"
-  # min_data_size: 50
-  # val_size: 400
-  # data_increment: 50
-  # batch_size: 50
-  # scramble_data_by: "z"
-  # discrete: False
 
 trainer:
   max_epochs: 100000
