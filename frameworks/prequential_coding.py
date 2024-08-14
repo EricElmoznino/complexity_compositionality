@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 import math
 import os
+from copy import deepcopy
 import torch
 from torch import nn, Tensor, FloatTensor, LongTensor
 from torch.nn import functional as F
@@ -21,7 +22,7 @@ class PrequentialCoding(ABC, LightningModule):
         interval_patience: int = 15,
         interval_patience_tol: float = 0.0,
         lr: float = 1e-3,
-        model_cache_dir: str | None = None,
+        model_cache: str | None = None,
         include_initial_length: bool = True,
         allow_final_overfit: bool = False,
     ):
@@ -36,9 +37,13 @@ class PrequentialCoding(ABC, LightningModule):
         self.interval_best_loss = torch.inf
         self.interval_errors = []
 
-        self.model_cache_dir = model_cache_dir
-        if model_cache_dir is None and "SLURM_TMPDIR" in os.environ:
-            self.model_cache_dir = os.environ["SLURM_TMPDIR"]
+        self.model_cache = model_cache
+        if model_cache is None:
+            self.best_model = None
+        elif model_cache == "slurm" and "SLURM_TMPDIR" in os.environ:
+            self.model_cache = os.environ["SLURM_TMPDIR"]
+        else:
+            assert os.path.exists(model_cache)
 
     @abstractmethod
     def forward(self, data: dict[str, Tensor]) -> Any:
@@ -109,24 +114,28 @@ class PrequentialCoding(ABC, LightningModule):
         if loss < self.interval_best_loss - self.interval_patience_tol:
             self.interval_best_loss = loss
             self.interval_epochs_since_improvement = 0
-            if self.model_cache_dir is not None:
+            if self.model_cache is None:
+                self.best_model = deepcopy(self.model.state_dict())
+            else:
                 torch.save(
                     self.model.state_dict(),
-                    os.path.join(self.model_cache_dir, "best.pt"),
+                    os.path.join(self.model_cache, "best.pt"),
                 )
         else:
             self.interval_epochs_since_improvement += 1
 
         # If no improvement, stop training on this current set of data
         if self.interval_epochs_since_improvement >= self.interval_patience:
-            if self.model_cache_dir is not None:
+            if self.model_cache is None:
+                self.model.load_state_dict(self.best_model)
+            else:
                 self.model.load_state_dict(
-                    torch.load(os.path.join(self.model_cache_dir, "best.pt"))
+                    torch.load(os.path.join(self.model_cache, "best.pt"))
                 )
             # Encode the next increment of data
             if not self.dataset.done:
                 self.dataset.increment_data_size()
-                self.compute_length(mode="all_train")
+                self.compute_length(mode="encode")
                 self.interval_epochs_since_improvement = 0
                 self.interval_best_loss = torch.inf
                 self.reset_model_params()
@@ -288,8 +297,10 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         super().__init__(*args, model=model, **kwargs)
         self.save_hyperparameters(ignore=["model"])
 
+        self.reset_model_params()
+
     def reset_model_params(self):
-        self.model[0].auto_model = AutoModel.from_config(self.config)
+        self.model[0].auto_model = AutoModel.from_config(self.config).to(self.device)
 
     def forward(
         self, data: dict[str, Tensor]
@@ -298,7 +309,7 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         attention_mask = torch.ones_like(w)
         attention_mask[w == 1] = 0
         w = {"input_ids": w, "attention_mask": attention_mask}
-        z_mu = self.model.forward(w)
+        z_mu = self.model.forward(w)["sentence_embedding"]
         z_logstd = math.log(1.0) * torch.ones_like(z_mu)
         return z_mu, z_logstd
 

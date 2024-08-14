@@ -34,5 +34,6 @@ data:
 
 trainer:
   max_epochs: 100000
+  reload_dataloaders_every_n_epochs: 1
 
 callbacks: False

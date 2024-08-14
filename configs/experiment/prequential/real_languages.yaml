@@ -1,4 +1,4 @@
-name: "Prequential Coding - Emergent Languages"
+name: "Prequential Coding - Natural Languages"
 
 framework:
   _target_: frameworks.prequential_coding.PrequentialCodingHuggingFaceSentence
@@ -11,7 +11,7 @@ framework:
 
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
-  data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/kolmogorov/results/real_languages/english"
+  data_dir: "/network/scratch/t/thomas.jiralerspong/kolmogorov/results/real_languages/english"
   min_data_size: 100
   val_size: 2000
   data_increment: 100
@@ -19,5 +19,6 @@ data:
 
 trainer:
   max_epochs: 100000
+  reload_dataloaders_every_n_epochs: 1
 
 callbacks: False
