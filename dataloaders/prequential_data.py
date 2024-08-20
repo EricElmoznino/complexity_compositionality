@@ -96,7 +96,9 @@ class PrequentialDataPipe(MapDataPipe):
         ), "Data size too small; must be incremented at least once"
 
         if scramble_data_by is None:
-            self._idx_map = lambda idx: idx
+            idx_scrambled = list(range(self.total_size))
+            np.random.shuffle(idx_scrambled)
+            self._idx_map = lambda idx: idx_scrambled[idx]
         else:
             self._idx_map = self.scramble_data(by=scramble_data_by)
 

@@ -7,11 +7,11 @@ framework:
   interval_patience_tol: 0.001
   include_initial_length: True
   model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-  short_vocab_size: 16600
+  short_vocab_size: 14725
 
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
-  data_dir: "/network/scratch/t/thomas.jiralerspong/kolmogorov/results/real_languages/english"
+  data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/"
   min_data_size: 100
   val_size: 2000
   data_increment: 100
