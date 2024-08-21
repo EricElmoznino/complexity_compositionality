@@ -31,13 +31,11 @@ dataset = dataset_preprocess(dataset)
 
 # Build w
 tokenizer = AutoTokenizer.from_pretrained(model_id)
-w_all_tokens = tokenizer(dataset, padding=True, truncation=True, return_tensors="pt")[
-    "input_ids"
-]
-unique = torch.unique(w_all_tokens)
-w = torch.zeros_like(w_all_tokens)
+w = tokenizer(dataset, padding=True, truncation=True, return_tensors="pt")["input_ids"]
+unique = torch.unique(w)
+w_short = torch.zeros_like(w)
 for i, u in enumerate(unique):
-    w[w_all_tokens == u] = i
+    w_short[w == u] = i
 
 # Build z
 model = SentenceTransformer(model_id)
@@ -48,6 +46,7 @@ z = torch.stack(z).cpu()
 # Save results
 os.mkdir(f"{save_dir}/{dataset_name}")
 torch.save(w, f"{save_dir}/{dataset_name}/w.pt")
+torch.save(w_short, f"{save_dir}/{dataset_name}/w_short.pt")
 torch.save(z, f"{save_dir}/{dataset_name}/z.pt")
 if save_text:
     with open(f"{save_dir}/{dataset_name}/sentences.txt", "w") as f:

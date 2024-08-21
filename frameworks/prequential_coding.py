@@ -287,13 +287,20 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         self,
         *args,
         model_name: str,
-        short_vocab_size: int,
+        learn_embeddings: bool = False,
+        short_vocab_size: int | None = None,
         **kwargs,
     ):
         model = SentenceTransformer(model_name)
         self.config = model[0].auto_model.config
-        self.config.vocab_size = short_vocab_size
+
+        if learn_embeddings:
+            assert short_vocab_size is not None
+            self.config.vocab_size = short_vocab_size
+
         model[0].auto_model = AutoModel.from_config(self.config)
+        if not learn_embeddings:
+            model[0].auto_model.embeddings.requires_grad_(False)
 
         super().__init__(*args, model=model, **kwargs)
         self.save_hyperparameters(ignore=["model"])
@@ -301,16 +308,27 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         self.reset_model_params()
 
     def reset_model_params(self):
-        self.model[0].auto_model.load_state_dict(
-            AutoModel.from_config(self.config).state_dict()
+        init_state = AutoModel.from_config(self.config).state_dict()
+        if not self.hparams.learn_embeddings:
+            init_state = {k: v for k, v in init_state.items() if "embeddings" not in k}
+        incompatible = self.model[0].auto_model.load_state_dict(
+            init_state, strict=False
         )
+        assert len(incompatible.unexpected_keys) == 0
+        if self.hparams.learn_embeddings:
+            assert len(incompatible.missing_keys) == 0
+        else:
+            assert all(["embeddings" in k for k in incompatible.missing_keys])
 
     def forward(
         self, data: dict[str, Tensor]
     ) -> FloatTensor | tuple[FloatTensor, FloatTensor]:
-        w: LongTensor = data["w"]
+        if self.hparams.learn_embeddings:
+            w: LongTensor = data["w_short"]
+        else:
+            w: LongTensor = data["w"]
         attention_mask = torch.ones_like(w)
-        attention_mask[w == 1] = 0
+        attention_mask[w == 1] = 0  # Assumes 1 is the padding token
         w = {"input_ids": w, "attention_mask": attention_mask}
         z_mu = self.model.forward(w)["sentence_embedding"]
         z_logstd = math.log(1.0) * torch.ones_like(z_mu)
