@@ -298,8 +298,9 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
             assert short_vocab_size is not None
             self.config.vocab_size = short_vocab_size
 
-        model[0].auto_model = AutoModel.from_config(self.config)
-        if not learn_embeddings:
+        if learn_embeddings:
+            model[0].auto_model = AutoModel.from_config(self.config)
+        else:
             model[0].auto_model.embeddings.requires_grad_(False)
 
         super().__init__(*args, model=model, **kwargs)

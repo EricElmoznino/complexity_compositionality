@@ -7,15 +7,19 @@ framework:
   interval_patience_tol: 0.001
   include_initial_length: True
   model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-  short_vocab_size: 14722
+  learn_embeddings: False
+  short_vocab_size: null
+  # learn_embeddings: True
+  # short_vocab_size: 14722
+
 
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
   data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/"
-  min_data_size: 1000
+  min_data_size: 10000
   val_size: 10000
-  data_increment: 1000
-  batch_size: 100
+  data_increment: 10000
+  batch_size: 250
 
 trainer:
   max_epochs: 100000
