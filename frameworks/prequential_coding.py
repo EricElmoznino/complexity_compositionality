@@ -293,6 +293,7 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         model = SentenceTransformer(model_name)
         self.config = model[0].auto_model.config
         self.config.vocab_size = short_vocab_size
+        model[0].auto_model = AutoModel.from_config(self.config)
 
         super().__init__(*args, model=model, **kwargs)
         self.save_hyperparameters(ignore=["model"])
@@ -300,7 +301,9 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         self.reset_model_params()
 
     def reset_model_params(self):
-        self.model[0].auto_model = AutoModel.from_config(self.config).to(self.device)
+        self.model[0].auto_model.load_state_dict(
+            AutoModel.from_config(self.config).state_dict()
+        )
 
     def forward(
         self, data: dict[str, Tensor]
