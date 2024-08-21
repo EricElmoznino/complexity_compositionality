@@ -47,7 +47,7 @@ z = torch.stack(z).cpu()
 
 # Save results
 os.mkdir(f"{save_dir}/{dataset_name}")
-torch.save(w_all_tokens, f"{save_dir}/{dataset_name}/w.pt")
+torch.save(w, f"{save_dir}/{dataset_name}/w.pt")
 torch.save(z, f"{save_dir}/{dataset_name}/z.pt")
 if save_text:
     with open(f"{save_dir}/{dataset_name}/sentences.txt", "w") as f:

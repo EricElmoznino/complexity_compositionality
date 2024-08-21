@@ -7,7 +7,7 @@ framework:
   interval_patience_tol: 0.001
   include_initial_length: True
   model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-  short_vocab_size: 14725
+  short_vocab_size: 14722
 
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
