@@ -25,7 +25,6 @@ class PrequentialCoding(ABC, LightningModule):
         model_cache: str | None = None,
         include_initial_length: bool = True,
         allow_final_overfit: bool = False,
-        reset_model_params: bool = True
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
@@ -139,9 +138,7 @@ class PrequentialCoding(ABC, LightningModule):
                 self.compute_length(mode="encode")
                 self.interval_epochs_since_improvement = 0
                 self.interval_best_loss = torch.inf
-                if self.hparams.reset_model_params:
-                    self.reset_model_params()
-                    
+                self.reset_model_params()
             # Get final loss across the whole dataset
             else:
                 self.compute_length(mode="all_train")
@@ -308,9 +305,8 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
 
         super().__init__(*args, model=model, **kwargs)
         self.save_hyperparameters(ignore=["model"])
-        
-        if self.hparams.reset_model_params:
-            self.reset_model_params()
+
+        self.reset_model_params()
 
     def reset_model_params(self):
         init_state = AutoModel.from_config(self.config).state_dict()

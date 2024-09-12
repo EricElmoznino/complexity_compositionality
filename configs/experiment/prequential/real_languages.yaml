@@ -9,14 +9,13 @@ framework:
   model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
   learn_embeddings: False
   short_vocab_size: null
-  reset_model_params: True
   # learn_embeddings: True
   # short_vocab_size: 14722
 
 
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
-  data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/complexity_compositionality/data/real_languages/coco-captions"
+  data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/"
   min_data_size: 10000
   val_size: 10000
   data_increment: 10000

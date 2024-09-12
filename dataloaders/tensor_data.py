@@ -53,4 +53,3 @@ class TensorDataPipe(MapDataPipe):
 
     def __getitem__(self, index) -> FloatTensor:
         return self.data[index]
-
