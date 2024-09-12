@@ -1,11 +1,8 @@
 name: "Prequential Coding - Natural Languages"
 
 framework:
-  _target_: frameworks.prequential_coding.PrequentialCodingHuggingFaceSentence
+  _target_: frameworks.full_train.FullTrainingHuggingFaceSentence
   lr: 0.0001
-  interval_patience: 5
-  interval_patience_tol: 0.001
-  include_initial_length: True
   model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
   learn_embeddings: False
   short_vocab_size: null
@@ -15,12 +12,11 @@ framework:
 
 
 data:
-  _target_: dataloaders.prequential_data.PrequentialDataModule
+  _target_: dataloaders.full_train_data.FullDataModule
   data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/complexity_compositionality/data/real_languages/coco-captions"
-  min_data_size: 10000
-  val_size: 10000
-  data_increment: 10000
   batch_size: 250
+
+
 
 trainer:
   max_epochs: 100000
