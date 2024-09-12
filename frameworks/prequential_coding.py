@@ -297,8 +297,6 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         if learn_embeddings:
             assert short_vocab_size is not None
             self.config.vocab_size = short_vocab_size
-
-        if learn_embeddings:
             model[0].auto_model = AutoModel.from_config(self.config)
         else:
             model[0].auto_model.embeddings.requires_grad_(False)
@@ -307,6 +305,16 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         self.save_hyperparameters(ignore=["model"])
 
         self.reset_model_params()
+
+        self.z_marginal_mu: FloatTensor | None = None
+        self.z_marginal_std: FloatTensor | None = None
+
+    def on_train_start(self):
+        super().on_train_start()
+        z = self.dataset.data["z"][
+            : self.dataset.data_sizes[0]
+        ]  # First transmitted chunk's standard deviation used for Skellam
+        self.z_marginal_std = z.std(dim=0, keepdim=True)
 
     def reset_model_params(self):
         init_state = AutoModel.from_config(self.config).state_dict()
@@ -321,9 +329,7 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         else:
             assert all(["embeddings" in k for k in incompatible.missing_keys])
 
-    def forward(
-        self, data: dict[str, Tensor]
-    ) -> FloatTensor | tuple[FloatTensor, FloatTensor]:
+    def forward(self, data: dict[str, Tensor]) -> FloatTensor:
         if self.hparams.learn_embeddings:
             w: LongTensor = data["w_short"]
         else:
@@ -332,23 +338,28 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         attention_mask[w == 1] = 0  # Assumes 1 is the padding token
         w = {"input_ids": w, "attention_mask": attention_mask}
         z_mu = self.model.forward(w)["sentence_embedding"]
-        z_logstd = math.log(1.0) * torch.ones_like(z_mu)
-        return z_mu, z_logstd
+        return z_mu
 
     def nll(
         self,
-        pred: FloatTensor | tuple[FloatTensor, FloatTensor],
+        pred: FloatTensor,
         data: dict[str, Tensor],
         encode: bool = False,
     ) -> FloatTensor:
-        z_true = data["z"]
-        z_mu, z_logstd = pred
+        z_true, z_mu = data["z"], pred
         if encode:
-            logp = skellam.approx_gaussian_logpmf(z_true, z_mu, z_logstd.exp())
+            neg_logp = -skellam.approx_gaussian_logpmf(
+                z_true, z_mu, self.z_marginal_std.expand_as(z_mu)
+            )
+            naive_neg_logp = -skellam.approx_gaussian_logpmf(
+                z_true,
+                self.z_marginal_mu.expand_as(z_true),
+                self.z_marginal_std.expand_as(z_true),
+            )
+            neg_logp = torch.where(torch.isinf(neg_logp), naive_neg_logp, neg_logp)
+            return neg_logp.sum()
         else:
-            logp = torch.distributions.Normal(z_mu, z_logstd.exp()).log_prob(z_true)
-        logp = logp.sum() if encode else logp.mean()
-        return -logp
+            return F.mse_loss(z_mu, z_true)
 
     def compute_naive_length(self) -> float:
         if self.dataset.data_size_idx == 0:
