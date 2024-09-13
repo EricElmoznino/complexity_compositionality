@@ -308,7 +308,6 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         self.reset_model_params()
 
         self.z_marginal_mu: FloatTensor | None = None
-        self.z_marginal_std: FloatTensor | None = None
 
     def on_train_start(self):
         super().on_train_start()
@@ -316,7 +315,6 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
             : self.dataset.data_sizes[0]
         ]  # First transmitted chunk's standard deviation used for Skellam
         self.z_marginal_mu = z.mean(dim=0, keepdim=True)
-        self.z_marginal_std = z.std(dim=0, keepdim=True)
 
     def reset_model_params(self):
         init_state = AutoModel.from_config(self.config).state_dict()
@@ -350,16 +348,9 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
     ) -> FloatTensor:
         z_true, z_mu = data["z"], pred
         if encode:
-            neg_logp = -skellam.approx_gaussian_logpmf(
-                z_true, z_mu, self.z_marginal_std.expand_as(z_mu)
-            )
-            naive_neg_logp = -skellam.approx_gaussian_logpmf(
-                z_true,
-                self.z_marginal_mu.expand_as(z_true).to(z_true.device),
-                self.z_marginal_std.expand_as(z_true).to(z_true.device),
-            )
-            neg_logp = torch.where(torch.isinf(neg_logp), naive_neg_logp, neg_logp)
-            return neg_logp.sum()
+            return F.mse_loss(
+                self.z_marginal_mu.expand_as(z_true), z_true, reduction="none"
+            ).sum()
         else:
             return F.mse_loss(z_mu, z_true)
 
@@ -372,9 +363,5 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
                     self.dataset.data_size_idx - 1
                 ] : self.dataset.data_sizes[self.dataset.data_size_idx]
             ]
-        z_marginal_mu, z_marginal_std = (
-            z.mean(dim=0, keepdim=True).expand_as(z),
-            z.std(dim=0, keepdim=True).expand_as(z),
-        )
-        logp = skellam.approx_gaussian_logpmf(z, z_marginal_mu, z_marginal_std)
-        return -logp.sum().item()
+        z_marginal_mu = z.mean(dim=0, keepdim=True).expand_as(z)
+        return F.mse_loss(z, z_marginal_mu, reduction="none").sum().item()
