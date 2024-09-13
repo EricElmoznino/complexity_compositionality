@@ -314,6 +314,7 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         z = self.dataset.data["z"][
             : self.dataset.data_sizes[0]
         ]  # First transmitted chunk's standard deviation used for Skellam
+        self.z_marginal_mu = z.mean(dim=0, keepdim=True)
         self.z_marginal_std = z.std(dim=0, keepdim=True)
 
     def reset_model_params(self):
@@ -353,8 +354,8 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
             )
             naive_neg_logp = -skellam.approx_gaussian_logpmf(
                 z_true,
-                self.z_marginal_mu.expand_as(z_true),
-                self.z_marginal_std.expand_as(z_true),
+                self.z_marginal_mu.expand_as(z_true).to(z_true.device),
+                self.z_marginal_std.expand_as(z_true).to(z_true.device),
             )
             neg_logp = torch.where(torch.isinf(neg_logp), naive_neg_logp, neg_logp)
             return neg_logp.sum()
