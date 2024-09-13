@@ -349,7 +349,9 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         z_true, z_mu = data["z"], pred
         if encode:
             return F.mse_loss(
-                self.z_marginal_mu.expand_as(z_true), z_true, reduction="none"
+                self.z_marginal_mu.expand_as(z_true).to(z_true.device),
+                z_true,
+                reduction="none",
             ).sum()
         else:
             return F.mse_loss(z_mu, z_true)
