@@ -139,6 +139,7 @@ class PrequentialCoding(ABC, LightningModule):
                 self.interval_epochs_since_improvement = 0
                 self.interval_best_loss = torch.inf
                 self.reset_model_params()
+                self.trainer.optimizers = [self.configure_optimizers()]
             # Get final loss across the whole dataset
             else:
                 self.compute_length(mode="all_train")
