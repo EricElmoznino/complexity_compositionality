@@ -347,14 +347,8 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         encode: bool = False,
     ) -> FloatTensor:
         z_true, z_mu = data["z"], pred
-        if encode:
-            return F.mse_loss(
-                self.z_marginal_mu.expand_as(z_true).to(z_true.device),
-                z_true,
-                reduction="none",
-            ).sum()
-        else:
-            return F.mse_loss(z_mu, z_true)
+        reduction = "sum" if encode else "mean"
+        return F.mse_loss(z_mu, z_true, reduction=reduction)
 
     def compute_naive_length(self) -> float:
         if self.dataset.data_size_idx == 0:
@@ -366,4 +360,4 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
                 ] : self.dataset.data_sizes[self.dataset.data_size_idx]
             ]
         z_marginal_mu = z.mean(dim=0, keepdim=True).expand_as(z)
-        return F.mse_loss(z, z_marginal_mu, reduction="none").sum().item()
+        return F.mse_loss(z, z_marginal_mu, reduction="sum").item()
