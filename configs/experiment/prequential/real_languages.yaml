@@ -16,9 +16,9 @@ framework:
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
   data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/"
-  min_data_size: 30000
+  min_data_size: 1000
   val_size: 10000
-  data_increment: 30000
+  data_increment_n_log_intervals: 12
   batch_size: 250
 
 trainer:

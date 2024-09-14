@@ -18,8 +18,9 @@ class PrequentialDataModule(LightningDataModule):
         data_dir: str,
         min_data_size: int,
         val_size: int,
-        data_increment: int,
         batch_size: int,
+        data_increment: int | None = None,
+        data_increment_n_log_intervals: int | None = None,
         num_workers: int = 0,
         val_train_shared: bool = False,
         scramble_data_by: str | None = None,
@@ -33,6 +34,7 @@ class PrequentialDataModule(LightningDataModule):
             min_data_size=self.hparams.min_data_size,
             val_size=self.hparams.val_size,
             data_increment=self.hparams.data_increment,
+            data_increment_n_log_intervals=self.hparams.data_increment_n_log_intervals,
             val_train_shared=self.hparams.val_train_shared,
             scramble_data_by=self.hparams.scramble_data_by,
         )
@@ -62,15 +64,22 @@ class PrequentialDataPipe(MapDataPipe):
         data_dir: str,
         min_data_size: int,
         val_size: int,
-        data_increment: int,
+        data_increment: int | None = None,
+        data_increment_n_log_intervals: int | None = None,
         val_train_shared: bool = False,
         scramble_data_by: str | None = None,
     ):
+        if data_increment is None:
+            assert data_increment_n_log_intervals is not None
+        else:
+            assert data_increment_n_log_intervals is None
+
         super().__init__()
         self.data_dir = data_dir
         self.min_data_size = min_data_size
         self.val_size = val_size
         self.data_increment = data_increment
+        self.data_increment_n_log_intervals = data_increment_n_log_intervals
         self.val_train_shared = val_train_shared
 
         # Note: This loads the entire dataset in RAM. For larger datasets, we should use save the data using numpy, load it using mmap_mode='r', and convert batches to tensors only in __getitem__().
@@ -87,7 +96,19 @@ class PrequentialDataPipe(MapDataPipe):
             self.train_size = self.total_size
         else:
             self.train_size = self.total_size - val_size
-        self.data_sizes = np.arange(min_data_size, self.train_size + 1, data_increment)
+        if data_increment is not None:
+            self.data_sizes = np.arange(
+                min_data_size, self.train_size + 1, data_increment
+            )
+        else:
+            self.data_sizes = np.logspace(
+                np.log10(min_data_size),
+                np.log10(self.train_size),
+                data_increment_n_log_intervals,
+                endpoint=True,
+                base=10,
+                dtype=int,
+            )
         self.data_size_idx = 0
 
         self.mode = "train"
