@@ -27,6 +27,7 @@ supported_ast_nodes = (
     *supported_ast_operators.keys(),
 )
 
+
 def _ast_eval_expr(node):
     """Evaluates part of an expression (potentially recursively)."""
     if isinstance(node, ast.Num):

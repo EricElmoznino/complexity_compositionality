@@ -25,7 +25,6 @@ class PrequentialCoding(ABC, LightningModule):
         model_cache: str | None = None,
         include_initial_length: bool = True,
         allow_final_overfit: bool = False,
-        reset_model_params: bool = True
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
@@ -139,9 +138,8 @@ class PrequentialCoding(ABC, LightningModule):
                 self.compute_length(mode="encode")
                 self.interval_epochs_since_improvement = 0
                 self.interval_best_loss = torch.inf
-                if self.hparams.reset_model_params:
-                    self.reset_model_params()
-                    
+                self.reset_model_params()
+                self.trainer.optimizers = [self.configure_optimizers()]
             # Get final loss across the whole dataset
             else:
                 self.compute_length(mode="all_train")
@@ -300,17 +298,23 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         if learn_embeddings:
             assert short_vocab_size is not None
             self.config.vocab_size = short_vocab_size
-
-        if learn_embeddings:
             model[0].auto_model = AutoModel.from_config(self.config)
         else:
             model[0].auto_model.embeddings.requires_grad_(False)
 
         super().__init__(*args, model=model, **kwargs)
         self.save_hyperparameters(ignore=["model"])
-        
-        if self.hparams.reset_model_params:
-            self.reset_model_params()
+
+        self.reset_model_params()
+
+        self.z_marginal_mu: FloatTensor | None = None
+
+    def on_train_start(self):
+        super().on_train_start()
+        z = self.dataset.data["z"][
+            : self.dataset.data_sizes[0]
+        ]  # First transmitted chunk's standard deviation used for Skellam
+        self.z_marginal_mu = z.mean(dim=0, keepdim=True)
 
     def reset_model_params(self):
         init_state = AutoModel.from_config(self.config).state_dict()
@@ -325,9 +329,7 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         else:
             assert all(["embeddings" in k for k in incompatible.missing_keys])
 
-    def forward(
-        self, data: dict[str, Tensor]
-    ) -> FloatTensor | tuple[FloatTensor, FloatTensor]:
+    def forward(self, data: dict[str, Tensor]) -> FloatTensor:
         if self.hparams.learn_embeddings:
             w: LongTensor = data["w_short"]
         else:
@@ -336,23 +338,17 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         attention_mask[w == 1] = 0  # Assumes 1 is the padding token
         w = {"input_ids": w, "attention_mask": attention_mask}
         z_mu = self.model.forward(w)["sentence_embedding"]
-        z_logstd = math.log(1.0) * torch.ones_like(z_mu)
-        return z_mu, z_logstd
+        return z_mu
 
     def nll(
         self,
-        pred: FloatTensor | tuple[FloatTensor, FloatTensor],
+        pred: FloatTensor,
         data: dict[str, Tensor],
         encode: bool = False,
     ) -> FloatTensor:
-        z_true = data["z"]
-        z_mu, z_logstd = pred
-        if encode:
-            logp = skellam.approx_gaussian_logpmf(z_true, z_mu, z_logstd.exp())
-        else:
-            logp = torch.distributions.Normal(z_mu, z_logstd.exp()).log_prob(z_true)
-        logp = logp.sum() if encode else logp.mean()
-        return -logp
+        z_true, z_mu = data["z"], pred
+        reduction = "sum" if encode else "mean"
+        return F.mse_loss(z_mu, z_true, reduction=reduction)
 
     def compute_naive_length(self) -> float:
         if self.dataset.data_size_idx == 0:
@@ -363,9 +359,5 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
                     self.dataset.data_size_idx - 1
                 ] : self.dataset.data_sizes[self.dataset.data_size_idx]
             ]
-        z_marginal_mu, z_marginal_std = (
-            z.mean(dim=0, keepdim=True).expand_as(z),
-            z.std(dim=0, keepdim=True).expand_as(z),
-        )
-        logp = skellam.approx_gaussian_logpmf(z, z_marginal_mu, z_marginal_std)
-        return -logp.sum().item()
+        z_marginal_mu = z.mean(dim=0, keepdim=True).expand_as(z)
+        return F.mse_loss(z, z_marginal_mu, reduction="sum").item()

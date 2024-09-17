@@ -4,22 +4,21 @@ framework:
   _target_: frameworks.prequential_coding.PrequentialCodingHuggingFaceSentence
   lr: 0.0001
   interval_patience: 5
-  interval_patience_tol: 0.001
+  interval_patience_tol: 0.0005
   include_initial_length: True
   model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
   learn_embeddings: False
   short_vocab_size: null
-  reset_model_params: True
   # learn_embeddings: True
   # short_vocab_size: 14722
 
 
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
-  data_dir: "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/complexity_compositionality/data/real_languages/coco-captions"
-  min_data_size: 10000
+  data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/"
+  min_data_size: 1000
   val_size: 10000
-  data_increment: 10000
+  data_increment_n_log_intervals: 12
   batch_size: 250
 
 trainer:

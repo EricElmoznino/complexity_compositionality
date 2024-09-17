@@ -6,7 +6,7 @@ from sentence_transformers import SentenceTransformer
 
 
 # Script arguments
-save_dir = "/home/mila/t/thomas.jiralerspong/kolmogorov/scratch/complexity_compositionality/data/real_languages"
+save_dir = "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages"
 dataset_id = "sentence-transformers/coco-captions"
 model_id = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 save_text = True
@@ -35,8 +35,6 @@ w = tokenizer(dataset, padding=True, truncation=True, return_tensors="pt")["inpu
 unique = torch.unique(w)
 w_short = torch.zeros_like(w)
 for i, u in enumerate(unique):
-    if i % 1000 == 0:
-        print(i)
     w_short[w == u] = i
 
 # Build z
