@@ -3,14 +3,12 @@ name: "Prequential Coding - Natural Languages"
 framework:
   _target_: frameworks.prequential_coding.PrequentialCodingHuggingFaceSentence
   lr: 0.0001
-  interval_patience: 5
-  interval_patience_tol: 0.0005
+  interval_patience: 3
+  interval_patience_tol: 0.0001
   include_initial_length: True
   model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
   learn_embeddings: False
   short_vocab_size: null
-  # learn_embeddings: True
-  # short_vocab_size: 14722
 
 
 data:
@@ -18,7 +16,7 @@ data:
   data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/english/"
   min_data_size: 1000
   val_size: 10000
-  data_increment_n_log_intervals: 12
+  data_increment_n_log_intervals: 16
   batch_size: 250
 
 trainer:
