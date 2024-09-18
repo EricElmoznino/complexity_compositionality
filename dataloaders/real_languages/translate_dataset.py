@@ -18,6 +18,7 @@ def translate_sentences(
     language,
     translation_model_id,
     batch_size,
+    max_translated_tokens,
 ):
     tokenizer = AutoTokenizer.from_pretrained(translation_model_id)
     model = AutoModelForSeq2SeqLM.from_pretrained(translation_model_id)
@@ -33,6 +34,7 @@ def translate_sentences(
             model,
             device,
             language,
+            max_translated_tokens,
         )
         translated_sentences += translated_batch
 
@@ -43,13 +45,13 @@ def translate_sentences(
     return translated_sentences
 
 
-def translate_batch(batch, tokenizer, model, device, language):
-    inputs = tokenizer(
-        batch, return_tensors="pt", padding=True, truncation=True, max_length=512
-    ).to(device)
+def translate_batch(batch, tokenizer, model, device, language, max_translated_tokens):
+    inputs = tokenizer(batch, return_tensors="pt", padding=True, truncation=True).to(
+        device
+    )
     translated = model.generate(
         **inputs,
-        max_length=512,
+        max_length=max_translated_tokens,
         forced_bos_token_id=tokenizer.convert_tokens_to_ids(language),
     )
     translated_sentences = tokenizer.batch_decode(translated, skip_special_tokens=True)
@@ -101,6 +103,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch_size", type=int, default=25, help="Batch size for translation"
     )
+    parser.add_argument(
+        "--max_translated_tokens",
+        type=int,
+        default=100,
+        help="Maximum number of tokens per translated sentence",
+    )
     args = parser.parse_args()
 
     target_dir = os.path.join(args.source_folder, language_code_to_name[args.language])
@@ -119,6 +127,7 @@ if __name__ == "__main__":
         args.language,
         args.translation_model_id,
         args.batch_size,
+        args.max_translated_tokens,
     )
     with open(os.path.join(target_dir, "sentences.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(translated_sentences))
