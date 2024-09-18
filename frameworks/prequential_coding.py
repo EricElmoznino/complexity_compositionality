@@ -259,7 +259,7 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
         )
 
     def compute_naive_length(self) -> float:
-        z = self.dataset[: len(self.dataset)]["z"]
+        z = self.dataset[:]["z"]
         if self.hparams.discrete_z:
             z_uniform = torch.distributions.Categorical(
                 logits=torch.ones(
@@ -335,6 +335,6 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
         return F.mse_loss(z_mu, z_true, reduction=reduction)
 
     def compute_naive_length(self) -> float:
-        z = self.dataset[: len(self.dataset)]["z"]
+        z = self.dataset[:]["z"]
         z_marginal_mu = z.mean(dim=0, keepdim=True).expand_as(z)
         return F.mse_loss(z, z_marginal_mu, reduction="sum").item()
