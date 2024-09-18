@@ -9,7 +9,7 @@ language_code_to_name = {
     "fra_Latn": "french",
     "deu_Latn": "german",
     "spa_Latn": "spanish",
-    "jpn_Jpan": "Japanese",
+    "jpn_Jpan": "japanese",
 }
 
 
