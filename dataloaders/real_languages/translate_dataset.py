@@ -99,7 +99,7 @@ if __name__ == "__main__":
         default="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
     )
     parser.add_argument(
-        "--batch_size", type=int, default=10, help="Batch size for translation"
+        "--batch_size", type=int, default=25, help="Batch size for translation"
     )
     args = parser.parse_args()
 
