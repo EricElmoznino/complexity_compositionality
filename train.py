@@ -1,4 +1,5 @@
 import hydra
+from omegaconf import OmegaConf
 from utils import ast_eval
 from lightning import Trainer, seed_everything
 import warnings
@@ -19,6 +20,12 @@ def train(cfg):
         if cfg.experiment.callbacks
         else None
     )
+
+    if logger:
+        logger.experiment.config.update(
+            OmegaConf.to_container(cfg.experiment, resolve=True)
+        )
+        logger.experiment.config.update({"seed": cfg.seed})
 
     trainer = Trainer(
         logger=logger,
