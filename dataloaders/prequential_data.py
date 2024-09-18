@@ -178,9 +178,15 @@ class PrequentialDataPipe(MapDataPipe):
             raise ValueError(f"Invalid mode: {self.mode}")
 
     def __getitem__(self, index) -> dict[str, Tensor]:
+        if isinstance(index, slice):
+            index = list(range(*index.indices(len(self))))
+        else:
+            index = [index]
         if self.mode == "val":
-            index += self.total_size - self.val_size
+            index = [i + self.total_size - self.val_size for i in index]
         elif self.mode == "encode":
-            index += self.data_sizes[self.data_size_idx - 1]
-        index = self._idx_map(index)
+            index = [i + self.data_sizes[self.data_size_idx - 1] for i in index]
+        index = [self._idx_map(i) for i in index]
+        if len(index) == 1:
+            index = index[0]
         return {k: v[index] for k, v in self.data.items()}
