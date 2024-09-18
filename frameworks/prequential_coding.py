@@ -260,13 +260,13 @@ class PrequentialCodingSentenceDecoder(PrequentialCoding):
 
     def compute_naive_length(self) -> float:
         if self.dataset.data_size_idx == 0:
-            z = self.dataset.data["z"][: self.dataset.data_sizes[0]]
+            z = self.dataset[: self.dataset.data_sizes[0]]["z"]
         else:
-            z = self.dataset.data["z"][
+            z = self.dataset[
                 self.dataset.data_sizes[
                     self.dataset.data_size_idx - 1
                 ] : self.dataset.data_sizes[self.dataset.data_size_idx]
-            ]
+            ]["z"]
         if self.hparams.discrete_z:
             z_uniform = torch.distributions.Categorical(
                 logits=torch.ones(
@@ -311,9 +311,7 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
 
     def on_train_start(self):
         super().on_train_start()
-        z = self.dataset.data["z"][
-            : self.dataset.data_sizes[0]
-        ]  # First transmitted chunk's standard deviation used for Skellam
+        z = self.dataset[: self.dataset.data_sizes[0]]["z"]
         self.z_marginal_mu = z.mean(dim=0, keepdim=True)
 
     def reset_model_params(self):
@@ -352,12 +350,12 @@ class PrequentialCodingHuggingFaceSentence(PrequentialCoding):
 
     def compute_naive_length(self) -> float:
         if self.dataset.data_size_idx == 0:
-            z = self.dataset.data["z"][: self.dataset.data_sizes[0]]
+            z = self.dataset[: self.dataset.data_sizes[0]]["z"]
         else:
-            z = self.dataset.data["z"][
+            z = self.dataset[
                 self.dataset.data_sizes[
                     self.dataset.data_size_idx - 1
                 ] : self.dataset.data_sizes[self.dataset.data_size_idx]
-            ]
+            ]["z"]
         z_marginal_mu = z.mean(dim=0, keepdim=True).expand_as(z)
         return F.mse_loss(z, z_marginal_mu, reduction="sum").item()
