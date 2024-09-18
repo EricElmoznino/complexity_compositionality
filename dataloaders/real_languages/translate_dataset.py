@@ -5,11 +5,12 @@ import torch
 import argparse
 import os
 
-language_code_to_name = {
-    "fra_Latn": "french",
-    "deu_Latn": "german",
-    "spa_Latn": "spanish",
-    "jpn_Jpan": "japanese",
+
+language_name_to_code = {
+    "french": "fra_Latn",
+    "german": "deu_Latn",
+    "spanish": "spa_Latn",
+    "japanese": "jpn_Jpan",
 }
 
 
@@ -52,18 +53,28 @@ def translate_batch(batch, tokenizer, model, device, language, max_translated_to
     translated = model.generate(
         **inputs,
         max_length=max_translated_tokens,
-        forced_bos_token_id=tokenizer.convert_tokens_to_ids(language),
+        forced_bos_token_id=tokenizer.convert_tokens_to_ids(
+            language_name_to_code[language]
+        ),
     )
     translated_sentences = tokenizer.batch_decode(translated, skip_special_tokens=True)
     return translated_sentences
 
 
-def embed_sentences(sentences, sentence_embedding_model_id):
+def embed_sentences(
+    sentences,
+    sentence_embedding_model_id,
+    max_translated_tokens,
+):
     # Build w
     tokenizer = AutoTokenizer.from_pretrained(sentence_embedding_model_id)
-    w = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")[
-        "input_ids"
-    ]
+    w = tokenizer(
+        sentences,
+        padding=True,
+        truncation=True,
+        return_tensors="pt",
+        max_length=max_translated_tokens,
+    )["input_ids"]
     unique = torch.unique(w)
     w_short = torch.zeros_like(w)
     for i, u in enumerate(unique):
@@ -111,7 +122,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    target_dir = os.path.join(args.source_folder, language_code_to_name[args.language])
+    target_dir = os.path.join(args.source_folder, args.language)
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
@@ -136,6 +147,7 @@ if __name__ == "__main__":
     w, w_short, z = embed_sentences(
         translated_sentences,
         args.sentence_embedding_model_id,
+        args.max_translated_tokens,
     )
     torch.save(w, os.path.join(target_dir, "w.pt"))
     torch.save(w_short, os.path.join(target_dir, "w_short.pt"))
