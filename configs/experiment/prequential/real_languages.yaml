@@ -10,7 +10,6 @@ framework:
   learn_embeddings: False
   short_vocab_size: null
 
-
 data:
   _target_: dataloaders.prequential_data.PrequentialDataModule
   data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/english/"
