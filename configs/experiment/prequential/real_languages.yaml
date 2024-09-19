@@ -16,7 +16,7 @@ data:
   data_dir: "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/english/"
   min_data_size: 1000
   val_size: 10000
-  data_increment_n_log_intervals: 16
+  data_increment_n_log_intervals: 15
   batch_size: 250
 
 trainer:
