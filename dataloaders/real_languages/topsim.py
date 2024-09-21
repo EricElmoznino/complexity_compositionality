@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 
 # Script arguments
-num_samples = 10000
+num_samples = 1000
 num_repeats = 10
 languages = ["english", "french", "german", "spanish", "japanese"]
 dataset = "coco-captions"
