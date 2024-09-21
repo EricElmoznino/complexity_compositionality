@@ -4,7 +4,9 @@ import numpy as np
 import torch
 
 # Script arguments
-data_dir = "/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/coco-captions/english/"
+language = "english"
+dataset = "coco-captions"
+data_dir = f"/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/{dataset}/{language}/"
 
 
 def edit_dist(str1, str2):
