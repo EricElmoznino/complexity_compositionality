@@ -1,12 +1,15 @@
+import sys
 from itertools import combinations
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 import torch
 
 # Script arguments
-language = "english"
+num_samples = 10000
+num_repeats = 10
+languages = ["english", "french", "german", "spanish", "japanese"]
 dataset = "coco-captions"
-data_dir = f"/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/{dataset}/{language}/"
 
 
 def edit_dist(str1, str2):
@@ -30,18 +33,48 @@ def edit_dist(str1, str2):
     return DM[-1]
 
 
-with open(data_dir + "sentences.txt", "r", encoding="utf-8") as f:
-    w = f.read().split("\n")
-z = torch.load(data_dir + "z.pt").cpu().numpy()
+def language_topsim(language):
+    print(f"Language: {language}")
 
-pair_indices = list(combinations(range(len(w)), 2))
-w_distmat = np.zeros(len(pair_indices))
-z_distmat = np.zeros(len(pair_indices))
+    data_dir = f"/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/{dataset}/{language}/"
 
-for pair in tqdm(pair_indices):
-    i, j = pair
-    w_distmat[pair] = edit_dist(w[i], w[j])
-    z_distmat[pair] = np.linalg.norm(z[i] - z[j])
+    with open(data_dir + "sentences.txt", "r", encoding="utf-8") as f:
+        w = f.read().split("\n")
+    z = torch.load(data_dir + "z.pt").cpu().numpy()
 
-topsim = np.corrcoef(w_distmat, z_distmat)[0, 1]
-print(f"Topological similarity: {topsim:0.5g}")
+    topsims = []
+    for i in range(num_repeats):
+        print(f"Repeat {i + 1}/{num_repeats}")
+
+        idxs = np.random.choice(len(w), num_samples, replace=False)
+        w_sample = [w[i] for i in idxs]
+        z_sample = z[idxs]
+
+        num_pair_entries = len(w_sample) * (len(w_sample) - 1) // 2
+        w_distmat = np.zeros(num_pair_entries)
+        z_distmat = np.zeros(num_pair_entries)
+
+        for i, (i1, i2) in tqdm(
+            enumerate(combinations(range(len(w_sample)), 2)),
+            total=num_pair_entries,
+        ):
+            w_distmat[i] = edit_dist(w_sample[i1], w_sample[i2])
+            z_distmat[i] = np.linalg.norm(z_sample[i1] - z_sample[i2])
+
+        topsim = np.corrcoef(w_distmat, z_distmat)[0, 1]
+        topsims.append(topsim)
+
+    return topsims
+
+
+all_language_topsims = []
+for language in languages:
+    topsims = language_topsim(language)
+    for t in topsims:
+        all_language_topsims.append({"language": language, "topsim": t})
+    print(f"Topological similarity for language: {language}")
+    print(f"Average: {np.mean(topsims):0.5g} ± {np.std(topsims):0.5g}")
+    print(f"All values: {topsims}")
+    print("\n")
+all_language_topsims = pd.DataFrame(all_language_topsims)
+all_language_topsims.to_csv("data/real_languages/topsims.csv", index=False)
