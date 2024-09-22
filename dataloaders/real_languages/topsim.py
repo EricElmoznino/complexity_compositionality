@@ -1,6 +1,4 @@
-import sys
 from itertools import combinations
-from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import torch
@@ -34,8 +32,6 @@ def edit_dist(str1, str2):
 
 
 def language_topsim(language):
-    print(f"Language: {language}")
-
     data_dir = f"/home/mila/e/eric.elmoznino/scratch/complexity_compositionality/data/real_languages/{dataset}/{language}/"
 
     with open(data_dir + "sentences.txt", "r", encoding="utf-8") as f:
@@ -44,8 +40,6 @@ def language_topsim(language):
 
     topsims = []
     for i in range(num_repeats):
-        print(f"Repeat {i + 1}/{num_repeats}")
-
         idxs = np.random.choice(len(w), num_samples, replace=False)
         w_sample = [w[i] for i in idxs]
         z_sample = z[idxs]
@@ -54,10 +48,7 @@ def language_topsim(language):
         w_distmat = np.zeros(num_pair_entries)
         z_distmat = np.zeros(num_pair_entries)
 
-        for i, (i1, i2) in tqdm(
-            enumerate(combinations(range(len(w_sample)), 2)),
-            total=num_pair_entries,
-        ):
+        for i, (i1, i2) in enumerate(combinations(range(len(w_sample)), 2)):
             w_distmat[i] = edit_dist(w_sample[i1], w_sample[i2])
             z_distmat[i] = np.linalg.norm(z_sample[i1] - z_sample[i2])
 
@@ -72,9 +63,9 @@ for language in languages:
     topsims = language_topsim(language)
     for t in topsims:
         all_language_topsims.append({"language": language, "topsim": t})
-    print(f"Topological similarity for language: {language}")
-    print(f"Average: {np.mean(topsims):0.5g} ± {np.std(topsims):0.5g}")
-    print(f"All values: {topsims}")
-    print("\n")
+
 all_language_topsims = pd.DataFrame(all_language_topsims)
-all_language_topsims.to_csv("data/real_languages/topsims.csv", index=False)
+all_language_topsims.to_csv(
+    "/home/mila/e/eric.elmoznino/complexity_compositionality/data/real_languages/topsims.csv",
+    index=False,
+)
