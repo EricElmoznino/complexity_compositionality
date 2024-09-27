@@ -1,25 +1,13 @@
-\documentclass{article}
+\documentclass{article} % For LaTeX2e
+\usepackage{style,times}
 
-\usepackage{supporting_files/arxiv}
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+\input{math_commands}
 
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
+\usepackage{natbib}
+\usepackage{hyperref}
 \usepackage{url}
-\usepackage{microtype}
-\usepackage[dvipsnames]{xcolor}
-\usepackage{comment}
 \usepackage[title]{appendix}
-
-% Figures
-\usepackage{graphicx}
-\usepackage{wrapfig}
-\usepackage{subcaption}
-\usepackage{float}
-\usepackage[font=small,labelfont=bf]{caption}
-\usepackage[normalem]{ulem}
-\usepackage{placeins}
-\usepackage{booktabs}
-\usepackage{chngcntr}   % appendix figure numbering
 
 % Math
 \usepackage{amsmath}
@@ -34,7 +22,7 @@
 \usepackage[ruled]{algorithm2e}
 \usepackage{algpseudocode}
 \usepackage{array, makecell}
-\input{supporting_files/math_commands}
+\usepackage{listings}
 
 % Theorems
 \declaretheorem[thmbox=M]{theorem}
@@ -45,46 +33,20 @@
 \declaretheorem[numberwithin=theorem, style=remark]{remark}
 \declaretheorem[style=definition, thmbox=M]{definition}
 
-% Citations and references
-\usepackage[sort]{natbib}
-\usepackage{hyperref}
+% Citations
 \usepackage[nameinlink,capitalize,noabbrev]{cleveref}
-\definecolor{mydarkblue}{rgb}{0,0.08,0.45}
-\hypersetup{colorlinks=true,
-    linkcolor=mydarkblue,
-    citecolor=mydarkblue,
-    filecolor=mydarkblue,
-    urlcolor=mydarkblue
-}
 \defcitealias{ji2024sources}{Ji \& Elmoznino et al., 2024}
-
-% Boxes
-\usepackage[most]{tcolorbox}
-\newtcolorbox[auto counter]{wrapbox}[2][]
-{
-  center,
-  breakable,
-  width = 1.09\linewidth,
-  colframe = gray!25,
-  colback  = gray!10,
-  coltitle = black,  
-  title    = \textbf{Box \thetcbcounter. #2},
-  #1,
-}
-
-% TODO notes
-\usepackage{blindtext}
-% \usepackage[disable]{todonotes} % notes not showed
-\usepackage[draft]{todonotes}   % notes showed
 
 % Macros
 \newcommand{\comp}{representational compositionality}
 \newcommand{\Comp}{Representational compositionality}
 
-\title{A Formal Theory of Compositionality}
 
-%\date{September 9, 1985}	% Here you can change the date presented in the paper title
-\date{} 					% Or removing it
+\title{Towards a formal theory of compositionality}
+
+% Authors must not appear in the submitted version. They should be hidden
+% as long as the \iclrfinalcopy macro remains commented out below.
+% Non-anonymous submissions will be rejected without review.
 
 \author{
     Eric Elmoznino$^{*,1,2}$, 
@@ -98,33 +60,26 @@
     }
 }
 
-% Uncomment to provide the publication venue
-\renewcommand{\headeright}{Preprint}
-\renewcommand{\undertitle}{}
-% Uncomment to put a shorter title in the header
-% \renewcommand{\shorttitle}{Short title}
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to \LaTeX{} to determine where to break
+% the lines. Using \AND forces a linebreak at that point. So, if \LaTeX{}
+% puts 3 of 4 authors names on the first line, and the last on the second
+% line, try using \AND instead of \And before the third author name.
 
-%%% Add PDF metadata to help others organize their library
-%%% Once the PDF is generated, you can check the metadata with
-%%% $ pdfinfo template.pdf
-\hypersetup{
-pdftitle={A formal theory of compositionality},
-pdfsubject={Deep learning},
-pdfauthor={Eric Elmoznino},
-pdfkeywords={compositionality, complexity, deep learning, representation, generalization},
-}
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
 
+% \iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
 \begin{document}
 
-% \listoftodos
-% \clearpage
 
 \maketitle
 
 \begin{abstract}
-    Compositionality is believed to be fundamental to intelligence. In humans, it underlies the structure of thought, language, and higher-level reasoning. In AI, compositional representations can enable a powerful form of out-of-distribution generalization, in which a model systematically adapts to novel combinations of known concepts. However, while we have strong intuitions about what compositionality is, there currently exists no formal definition for it that is measurable and mathematical. Here, we propose such a definition, which we call \textit{\comp{}}, that accounts for and extends our intuitions about compositionality. The definition is conceptually simple, quantitative, grounded in algorithmic information theory, and applicable to any representation; for instance, it assigns a single scalar quantifying the compositionality of a representation in some intermediate layer of a trained neural network. Intuitively, \comp{} states that a compositional representation satisfies three properties. First, it must be expressive. Second, it must be possible to redescribe the representation as a function of discrete symbolic sequences, analogous to sentences in natural language. Third, the function that relates these symbolic sequences to the representation---analogous to semantics in natural language---must be simple. Through experiments on both synthetic and real world data, we validate our definition of compositionality and show how it unifies disparate intuitions from across the literature in both AI and cognitive science. We also show that \comp{}, while theoretically intractable, can be readily estimated using standard deep learning tools. Our definition has the potential to inspire the design of novel, theoretically-driven models that better capture the mechanisms of higher-level human thought, just as formal definitions in other areas of science have traditionally enabled technological breakthroughs.
+Compositionality is believed to be fundamental to intelligence. In humans, it underlies the structure of thought, language, and higher-level reasoning. In AI, compositional representations can enable a powerful form of out-of-distribution generalization, in which a model systematically adapts to novel combinations of known concepts. However, while we have strong intuitions about what compositionality is, there currently exists no formal definition for it that is measurable and mathematical. Here, we propose such a definition, which we call \textit{\comp{}}, that accounts for and extends our intuitions about compositionality. The definition is conceptually simple, quantitative, grounded in algorithmic information theory, and applicable to any representation; for instance, it assigns a single scalar quantifying the compositionality of a representation in some intermediate layer of a trained neural network. Intuitively, \comp{} states that a compositional representation satisfies three properties. First, it must be expressive. Second, it must be possible to redescribe the representation as a function of discrete symbolic sequences, analogous to sentences in natural language. Third, the function that relates these symbolic sequences to the representation---analogous to semantics in natural language---must be simple. Through experiments on both synthetic and real world data, we validate our definition of compositionality and show how it unifies disparate intuitions from across the literature in both AI and cognitive science. We also show that \comp{}, while theoretically intractable, can be readily estimated using standard deep learning tools. Our definition has the potential to inspire the design of novel, theoretically-driven models that better capture the mechanisms of higher-level human thought, just as formal definitions in other areas of science have traditionally enabled technological breakthroughs.
 \end{abstract}
-\keywords{compositionality, complexity, deep learning, representation, generalization}
 
 
 \section{Introduction}
@@ -296,7 +251,7 @@ Our first set of experiments consider representations $Z$ that are generated syn
 \begin{figure}[ht]
     \centering
     \includegraphics[width=\linewidth]{figures/synthetic.pdf}
-    \caption{\textbf{Compositionality of synthetically-generated representations.} \Comp{} $C(Z)$ is shown in \textcolor{MidnightBlue}{blue}, topological similarity is shown in \textcolor{BrickRed}{red}. $C(Z)$ is consistent with intuitions about compositionality across all experiments, whereas topological similarity is not. \textbf{a.} Lookup table representations are generated by uniformly sampling sentences of a particular length and vocabulary size, and mapping individual words or $n$-grams to vectors in a lookup table, followed by concatenation. \textbf{b.} $C(Z)$ and topological similarity as a function of ground-truth representation properties. ``Disentanglement'' refers to varying $n$-gram size. \textbf{c.} Synthetic grammar representations are generated by first sampling sentences using some transition matrix $p(w_{i+1}|w_i)$ and parsing them according to a pre-defined context-free grammar. Parses produce a binary tree with words as the leaves and grammar rules as the nodes. Words are mapped to vector embeddings in a lookup table, and rule application linearly projects concatenated inputs using rule-specific weights. The representation is constructed by first embedding the words and then hierarchically applying the correct rule's linear projection at each node until the root is reached. \textbf{d.} Compositionality and topological similarity as a function of ground-truth properties of the grammar. All error bars show standard deviations across $10$ random seeds.}
+    \caption{\textbf{Compositionality of synthetically-generated representations.} \Comp{} $C(Z)$ is shown in blue, topological similarity is shown in red. $C(Z)$ is consistent with intuitions about compositionality across all experiments, whereas topological similarity is not. \textbf{a.} Lookup table representations are generated by uniformly sampling sentences of a particular length and vocabulary size, and mapping individual words or $n$-grams to vectors in a lookup table, followed by concatenation. \textbf{b.} $C(Z)$ and topological similarity as a function of ground-truth representation properties. ``Disentanglement'' refers to varying $n$-gram size. \textbf{c.} Synthetic grammar representations are generated by first sampling sentences using some transition matrix $p(w_{i+1}|w_i)$ and parsing them according to a pre-defined context-free grammar. Parses produce a binary tree with words as the leaves and grammar rules as the nodes. Words are mapped to vector embeddings in a lookup table, and rule application linearly projects concatenated inputs using rule-specific weights. The representation is constructed by first embedding the words and then hierarchically applying the correct rule's linear projection at each node until the root is reached. \textbf{d.} Compositionality and topological similarity as a function of ground-truth properties of the grammar. All error bars show standard deviations across $10$ random seeds.}
     \label{fig:synthetic}
 \end{figure}
 
@@ -332,7 +287,7 @@ As both width and depth increase the complexity of the grammar, we should expect
 \begin{figure}[ht]
     \centering
     \includegraphics[width=\linewidth]{figures/emergent.pdf}
-    \caption{\textbf{Compositionality of language systems that emerge in multi-agent settings with and without iterated learning.} \textbf{a.} We consider language systems in which $W^L$ and $Z$ emerge from agents trained to communicate in an object reference game. Iterated learning is an inductive bias for compositionality in which periodically resetting model parameters creates simpler languages across generations. We trained models with and without iterated learning to compare their compositionalities using our definition. \textbf{b.} We used prequential coding to measure $K(Z | W^L)$ for the emergent languages, where the area under the curve is the ``prequential code length'' estimating compression size. $W^L$ for models trained using iterated learning achieved a much lower prequential code length than those trained normally without iterated learning, meaning the semantics $f$ mapping $W^L$ to $Z$ were simpler. \textbf{c.} Our language system compositionality metric $C^L(Z)$ (\textcolor{MidnightBlue}{blue}) agrees with topological similarity (\textcolor{BrickRed}{red}) on the ordering of models trained with and without iterated learning, but the numerical values provided by $C^L(Z)$ provide more theoretical insight (see main text). All error bars show standard deviations across $5$ random seeds.}
+    \caption{\textbf{Compositionality of language systems that emerge in multi-agent settings with and without iterated learning.} \textbf{a.} We consider language systems in which $W^L$ and $Z$ emerge from agents trained to communicate in an object reference game. Iterated learning is an inductive bias for compositionality in which periodically resetting model parameters creates simpler languages across generations. We trained models with and without iterated learning to compare their compositionalities using our definition. \textbf{b.} We used prequential coding to measure $K(Z | W^L)$ for the emergent languages, where the area under the curve is the ``prequential code length'' estimating compression size. $W^L$ for models trained using iterated learning achieved a much lower prequential code length than those trained normally without iterated learning, meaning the semantics $f$ mapping $W^L$ to $Z$ were simpler. \textbf{c.} Our language system compositionality metric $C^L(Z)$ (blue) agrees with topological similarity (red) on the ordering of models trained with and without iterated learning, but the numerical values provided by $C^L(Z)$ provide more theoretical insight (see main text). All error bars show standard deviations across $5$ random seeds.}
     \label{fig:emergent}
 \end{figure}
 
@@ -373,12 +328,18 @@ In virtue of being quantitatively precise, \comp{} can be used to investigate co
 \Comp{} can also play an important role in the design and validation of machine learning models with principled inductive biases for compositionality. Namely, in addition to supporting a given task, a compositional representation must be easily describable as a simple function of constituent parts. There are both direct and indirect ways to achieve this that are grounded in our definition, both of which we intend to pursue in future work.
 
 
-\clearpage
-\bibliographystyle{apalike}
+\subsubsection*{Author Contributions}
+If you'd like to, you may include  a section for author contributions as is done
+in many journals. This is optional and at the discretion of the authors.
+
+\subsubsection*{Acknowledgments}
+Use unnumbered third level headings for the acknowledgments. All
+acknowledgments, including those to funding agencies, go at the end of the paper.
+
+
 \bibliography{references}
+\bibliographystyle{ref_style}
 
-
-\clearpage
 \begin{appendices}
 \crefalias{section}{appendix}   % For cleveref to name correctly
 \counterwithin{figure}{section} % Reset counter for appendix figures
@@ -769,6 +730,5 @@ Our approach for measuring the compositionalities of real-world language systems
 
 
 \end{appendices}
-
 
 \end{document}
